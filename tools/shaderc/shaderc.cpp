@@ -46,9 +46,8 @@ extern "C"
 #include "glsl_optimizer.h"
 
 #if BX_PLATFORM_WINDOWS
-#	if BX_COMPILER_GCC
-#		include <sal.h>
-#	endif // BX_COMPILER_GCC
+#	include <sal.h>
+#	define __D3DX9MATH_INL__ // not used and MinGW complains about type-punning
 #	include <d3dx9.h>
 #	include <d3dcompiler.h>
 #endif // BX_PLATFORM_WINDOWS
@@ -150,7 +149,7 @@ struct ConstantType
 
 #define BGFX_UNIFORM_FRAGMENTBIT UINT8_C(0x10)
 
-static const char* s_constantTypeName[ConstantType::Count] =
+const char* s_constantTypeName[ConstantType::Count] =
 {
 	"int",
 	"float",
@@ -666,7 +665,6 @@ bool compileHLSLShaderDx9(bx::CommandLine& _cmdLine, const std::string& _code, b
 		bx::write(_writer, un.regIndex);
 		bx::write(_writer, un.regCount);
 
-		BX_UNUSED(s_constantTypeName);
 		BX_TRACE("%s, %s, %d, %d, %d"
 			, un.name.c_str()
 			, s_constantTypeName[un.type]
@@ -674,7 +672,6 @@ bool compileHLSLShaderDx9(bx::CommandLine& _cmdLine, const std::string& _code, b
 			, un.regIndex
 			, un.regCount
 			);
-		BX_UNUSED(s_constantTypeName);
 	}
 
 	uint16_t shaderSize = (uint16_t)code->GetBufferSize();
@@ -999,7 +996,7 @@ bool compileHLSLShaderDx11(bx::CommandLine& _cmdLine, const std::string& _code, 
 
 struct Preprocessor
 {
-	Preprocessor(const char* _filePath)
+	Preprocessor(const char* _filePath, const char* _includeDir = NULL)
 		: m_tagptr(m_tags)
 		, m_scratchPos(0)
 		, m_fgetsPos(0)
@@ -1035,6 +1032,24 @@ struct Preprocessor
 		m_tagptr->tag = FPPTAG_INPUT_NAME;
 		m_tagptr->data = scratch(_filePath);
 		m_tagptr++;
+
+		if (NULL != _includeDir)
+		{
+			char* start = scratch(_includeDir);
+
+			for (char* split = strchr(start, ';'); NULL != split; split = strchr(start, ';'))
+			{
+				*split = '\0';
+				m_tagptr->tag = FPPTAG_INCLUDE_DIR;
+				m_tagptr->data = start;
+				m_tagptr++;
+				start = split + 1;
+			}
+
+			m_tagptr->tag = FPPTAG_INCLUDE_DIR;
+			m_tagptr->data = start;
+			m_tagptr++;
+		}
 
 		m_default = "#define lowp\n#define mediump\n#define highp\n";
 	}
@@ -1136,7 +1151,7 @@ struct Preprocessor
 		thisClass->m_preprocessed += _ch;
 	}
 
-	static void fppError(void* _userData, char* _format, va_list _vargs)
+	static void fppError(void* /*_userData*/, char* _format, va_list _vargs)
 	{
 		vfprintf(stderr, _format, _vargs);
 	}
@@ -1198,7 +1213,7 @@ uint32_t parseInOut(InOut& _inout, const char* _str, const char* _eol)
 				_str = bx::strws(delim + 1);
 			}
 		}
-		while (delim < _eol && NULL != delim);
+		while (delim < _eol && _str < _eol && NULL != delim);
 
 		std::sort(_inout.begin(), _inout.end() );
 
@@ -1243,6 +1258,7 @@ void help(const char* _error = NULL)
 		  "\n"
 		  "Options:\n"
 		  "  -f <file path>                Input file path.\n"
+		  "  -i <include path>             Include path (for multiple paths use semicolon).\n"
 		  "  -o <file path>                Output file path.\n"
 		  "      --bin2c <file path>       Generate C header file.\n"
 		  "      --depends <file path>     Generate makefile style depends file.\n"
@@ -1353,8 +1369,9 @@ int main(int _argc, const char* _argv[])
 
 	bool depends = cmdLine.hasArg("depends");
 	bool preprocessOnly = cmdLine.hasArg("preprocess");
+	const char* includeDir = cmdLine.findOption('i');
 
-	Preprocessor preprocessor(filePath);
+	Preprocessor preprocessor(filePath, includeDir);
 
 	preprocessor.setDefaultDefine("BX_PLATFORM_ANDROID");
 	preprocessor.setDefaultDefine("BX_PLATFORM_IOS");
@@ -1479,7 +1496,7 @@ int main(int _argc, const char* _argv[])
 					varyingMap.insert(std::make_pair(var.m_name, var) );
 				}
 
-				parse = eol + 1;
+				parse = bx::strnl(eol);
 			}
 		}
 
@@ -1516,11 +1533,15 @@ int main(int _argc, const char* _argv[])
 				if (0 == strncmp(str, "input", 5) )
 				{
 					str += 5;
+					const char* comment = strstr(str, "//");
+					eol = NULL != comment && comment < eol ? comment : eol;
 					inputHash = parseInOut(shaderInputs, str, eol);
 				}
 				else if (0 == strncmp(str, "output", 6) )
 				{
 					str += 6;
+					const char* comment = strstr(str, "//");
+					eol = NULL != comment && comment < eol ? comment : eol;
 					outputHash = parseInOut(shaderOutputs, str, eol);
 				}
 			}

@@ -94,15 +94,15 @@ static const bgfx::Memory* loadShader(const char* _name)
 	return load(filePath);
 }
 
-int _main_(int _argc, char** _argv)
+int _main_(int /*_argc*/, char** /*_argv*/)
 {
 	uint32_t width = 1280;
 	uint32_t height = 720;
 	uint32_t debug = BGFX_DEBUG_TEXT;
-	uint32_t reset = BGFX_RESET_NONE;
+	uint32_t reset = BGFX_RESET_VSYNC;
 
 	bgfx::init();
-	bgfx::reset(width, height);
+	bgfx::reset(width, height, reset);
 
 	// Enable debug text.
 	bgfx::setDebug(debug);
@@ -172,6 +172,19 @@ int _main_(int _argc, char** _argv)
 	bgfx::destroyVertexShader(vsh);
 	bgfx::destroyFragmentShader(fsh);
 
+	float at[3] = { 0.0f, 0.0f, 0.0f };
+	float eye[3] = { 0.0f, 0.0f, -35.0f };
+
+	float view[16];
+	float proj[16];
+	mtxLookAt(view, eye, at);
+	mtxProj(proj, 60.0f, 16.0f/9.0f, 0.1f, 100.0f);
+
+	// Set view and projection matrix for view 0.
+	bgfx::setViewTransform(0, view, proj);
+
+	int64_t timeOffset = bx::getHPCounter();
+
 	while (!processEvents(width, height, debug, reset) )
 	{
 		// Set view 0 default viewport.
@@ -188,24 +201,13 @@ int _main_(int _argc, char** _argv)
 		const double freq = double(bx::getHPFrequency() );
 		const double toMs = 1000.0/freq;
 
+		float time = (float)( (now-timeOffset)/double(bx::getHPFrequency() ) );
+
 		// Use debug font to print information about this example.
 		bgfx::dbgTextClear();
 		bgfx::dbgTextPrintf(0, 1, 0x4f, "bgfx/examples/01-cube");
 		bgfx::dbgTextPrintf(0, 2, 0x6f, "Description: Rendering simple static mesh.");
 		bgfx::dbgTextPrintf(0, 3, 0x0f, "Frame: % 7.3f[ms]", double(frameTime)*toMs);
-
-		float at[3] = { 0.0f, 0.0f, 0.0f };
-		float eye[3] = { 0.0f, 0.0f, -35.0f };
-		
-		float view[16];
-		float proj[16];
-		mtxLookAt(view, eye, at);
-		mtxProj(proj, 60.0f, 16.0f/9.0f, 0.1f, 100.0f);
-
-		// Set view and projection matrix for view 0.
-		bgfx::setViewTransform(0, view, proj);
-
-		float time = (float)(bx::getHPCounter()/double(bx::getHPFrequency() ) );
 
 		// Submit 11x11 cubes.
 		for (uint32_t yy = 0; yy < 11; ++yy)

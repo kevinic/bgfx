@@ -40,7 +40,7 @@ INLINE FILE_LOCAL ReturnCode cppmain(struct Global *);
 
 int fppPreProcess(struct fppTag *tags)
 {
-  int i=0;
+  size_t i=0;
   ReturnCode ret;       /* cpp return code */
   struct Global *global;
 
@@ -224,7 +224,7 @@ ReturnCode cppmain(struct Global *global)
   include = global->included;
 
   while(include--) {
-    openinclude(global, global->include[include], TRUE);
+    openinclude(global, global->include[(unsigned)include], TRUE);
   }
   
   for (;;) {
@@ -310,7 +310,7 @@ ReturnCode cppmain(struct Global *global)
 	    Putstring(global, global->spacebuf); /* Output all whitespaces */
 	  }
 	}
-	if(ret=macroid(global, &c))   /* Grab the token       */
+	if((ret=macroid(global, &c)))   /* Grab the token       */
 	  return(ret);
       } while (type[c] == LET && catenate(global, &ret) && !ret);
       if(ret)

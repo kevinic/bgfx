@@ -16,7 +16,7 @@ GL_IMPORT(false, PFNGLGETERRORPROC,                       glGetError);
 GL_IMPORT(false, PFNGLREADPIXELSPROC,                     glReadPixels);
 GL_IMPORT(false, PFNGLTEXIMAGE2DPROC,                     glTexImage2D);
 GL_IMPORT(false, PFNGLTEXSUBIMAGE2DPROC,                  glTexSubImage2D);
-GL_IMPORT(false, PFNGLPIXELSTOREI,                        glPixelStorei);
+GL_IMPORT(false, PFNGLPIXELSTOREIPROC,                    glPixelStorei);
 GL_IMPORT(false, PFNGLTEXPARAMETERIPROC,                  glTexParameteri);
 GL_IMPORT(false, PFNGLTEXPARAMETERIVPROC,                 glTexParameteriv);
 GL_IMPORT(false, PFNGLTEXPARAMETERFPROC,                  glTexParameterf);
@@ -124,10 +124,6 @@ GL_IMPORT(true,  PFNGLBLITFRAMEBUFFERPROC,                glBlitFramebuffer);
 GL_IMPORT(true,  PFNGLQUERYCOUNTERPROC,                   glQueryCounter);
 GL_IMPORT(true,  PFNGLGETQUERYOBJECTI64VPROC,             glGetQueryObjecti64v);
 GL_IMPORT(true,  PFNGLGETQUERYOBJECTUI64VPROC,            glGetQueryObjectui64v);
-GL_IMPORT(true,  PFNGLGETQUERYOBJECTI64VEXTPROC,          glGetQueryObjecti64vEXT);
-GL_IMPORT(true,  PFNGLGETQUERYOBJECTUI64VEXTPROC,         glGetQueryObjectui64vEXT);
-
-GL_IMPORT(true,  PFNGLSAMPLECOVERAGEARBPROC,              glSampleCoverageARB);
 
 GL_IMPORT(true,  PFNGLBINDVERTEXARRAYPROC,                glBindVertexArray);
 GL_IMPORT(true,  PFNGLDELETEVERTEXARRAYSPROC,             glDeleteVertexArrays);
@@ -139,6 +135,12 @@ GL_IMPORT(true,  PFNGLSTENCILOPSEPARATEPROC,              glStencilOpSeparate);
 
 GL_IMPORT(true,  PFNGLBLENDFUNCSEPARATEPROC,              glBlendFuncSeparate);
 GL_IMPORT(true,  PFNGLBLENDEQUATIONSEPARATEPROC,          glBlendEquationSeparate);
+GL_IMPORT(true,  PFNGLBLENDCOLORPROC,                     glBlendColor);
+
+GL_IMPORT(true,  PFNGLDEBUGMESSAGECONTROLARBPROC,         glDebugMessageControlARB);
+GL_IMPORT(true,  PFNGLDEBUGMESSAGEINSERTARBPROC,          glDebugMessageInsertARB);
+GL_IMPORT(true,  PFNGLDEBUGMESSAGECALLBACKARBPROC,        glDebugMessageCallbackARB);
+GL_IMPORT(true,  PFNGLGETDEBUGMESSAGELOGARBPROC,          glGetDebugMessageLogARB);
 
 #if BGFX_CONFIG_DEBUG_GREMEDY
 GL_IMPORT(true,  PFNGLSTRINGMARKERGREMEDYPROC,            glStringMarkerGREMEDY);

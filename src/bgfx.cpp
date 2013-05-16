@@ -33,19 +33,25 @@ namespace bgfx
 #	define BGFX_CHECK_RENDER_THREAD()
 #endif // BGFX_CONFIG_MULTITHREADED
 
-#if BX_PLATFORM_WINDOWS
-	HWND g_bgfxHwnd = NULL;
-
-	void winSetHwnd(::HWND _hwnd)
+#if BX_PLATFORM_ANDROID
+	::ANativeWindow* g_bgfxAndroidWindow = NULL;
+	void androidSetWindow(ANativeWindow* _window)
 	{
-		g_bgfxHwnd = _hwnd;
+		g_bgfxAndroidWindow = _window;
 	}
 #elif BX_PLATFORM_OSX
 	void* g_bgfxNSWindow = NULL;
 	
-	void osxSetNSWindow(void* _nsWindow)
+	void osxSetNSWindow(void* _window)
 	{
-		g_bgfxNSWindow = _nsWindow;
+		g_bgfxNSWindow = _window;
+	}
+#elif BX_PLATFORM_WINDOWS
+	::HWND g_bgfxHwnd = NULL;
+
+	void winSetHwnd(::HWND _window)
+	{
+		g_bgfxHwnd = _window;
 	}
 #endif // BX_PLATFORM_*
 
@@ -57,10 +63,16 @@ namespace bgfx
 
 		virtual void fatal(Fatal::Enum _code, const char* _str) BX_OVERRIDE
 		{
-			BX_TRACE("0x%08x: %s", _code, _str);
-			BX_UNUSED(_code);
-			BX_UNUSED(_str);
-			abort();
+			if (Fatal::DebugCheck == _code)
+			{
+				bx::debugBreak();
+			}
+			else
+			{
+				BX_TRACE("0x%08x: %s", _code, _str);
+				BX_UNUSED(_code, _str);
+				abort();
+			}
 		}
 
 		virtual uint32_t cacheReadSize(uint64_t /*_id*/) BX_OVERRIDE
@@ -125,7 +137,7 @@ namespace bgfx
 
 		va_list argList;
 		va_start(argList, _format);
-		vsnprintf(temp, sizeof(temp), _format, argList);
+		bx::vsnprintf(temp, sizeof(temp), _format, argList);
 		va_end(argList);
 
 		temp[sizeof(temp)-1] = '\0';
@@ -264,7 +276,7 @@ namespace bgfx
 		uint8_t* rgba = mem->data;
 		charsetFillTexture(vga8x8, rgba, 8, pitch, bpp);
 		charsetFillTexture(vga8x16, &rgba[8*pitch], 16, pitch, bpp);
-		m_texture = createTexture2D(2048, 24, 1, TextureFormat::L8
+		m_texture = createTexture2D(width, height, 1, TextureFormat::L8
 						, BGFX_TEXTURE_MIN_POINT
 						| BGFX_TEXTURE_MAG_POINT
 						| BGFX_TEXTURE_MIP_POINT
@@ -423,7 +435,7 @@ namespace bgfx
 	void ClearQuad::init()
 	{
 		BGFX_CHECK_MAIN_THREAD();
-#if BGFX_CONFIG_RENDERER_DIRECT3D11
+#if BGFX_CONFIG_CLEAR_QUAD
 		m_decl.begin();
 		m_decl.add(Attrib::Position, 3, AttribType::Float);
 		m_decl.add(Attrib::Color0, 4, AttribType::Uint8, true);
@@ -431,12 +443,18 @@ namespace bgfx
 
 		const Memory* mem;
 
-		mem = alloc(sizeof(vs_clear_dx11)+1);
-		memcpy(mem->data, vs_clear_dx11, mem->size-1);
+#	if BGFX_CONFIG_RENDERER_DIRECT3D11
+		mem = makeRef(vs_clear_dx11, sizeof(vs_clear_dx11) );
+#	elif BGFX_CONFIG_RENDERER_OPENGL
+		mem = makeRef(vs_clear_glsl, sizeof(vs_clear_glsl) );
+#	endif // BGFX_CONFIG_RENDERER_*
 		VertexShaderHandle vsh = createVertexShader(mem);
 
-		mem = alloc(sizeof(fs_clear_dx11)+1);
-		memcpy(mem->data, fs_clear_dx11, mem->size-1);
+#	if BGFX_CONFIG_RENDERER_DIRECT3D11
+		mem = makeRef(fs_clear_dx11, sizeof(fs_clear_dx11) );
+#	elif BGFX_CONFIG_RENDERER_OPENGL
+		mem = makeRef(fs_clear_glsl, sizeof(fs_clear_glsl) );
+#	endif // BGFX_CONFIG_RENDERER_*
 		FragmentShaderHandle fsh = createFragmentShader(mem);
 
 		m_program = createProgram(vsh, fsh);
@@ -454,17 +472,18 @@ namespace bgfx
 		indices[4] = 3;
 		indices[5] = 0;
 		m_ib = s_ctx.createIndexBuffer(mem);
-#endif // BGFX_CONFIG_RENDERER_DIRECT3D11
+#endif // BGFX_CONFIG_CLEAR_QUAD
 	}
 
 	void ClearQuad::shutdown()
 	{
 		BGFX_CHECK_MAIN_THREAD();
-#if BGFX_CONFIG_RENDERER_DIRECT3D11
+
+#if BGFX_CONFIG_CLEAR_QUAD
 		destroyProgram(m_program);
 		destroyIndexBuffer(m_ib);
 		s_ctx.destroyTransientVertexBuffer(m_vb);
-#endif // BGFX_CONFIG_RENDERER_DIRECT3D11
+#endif // BGFX_CONFIG_CLEAR_QUAD
 	}
 
 	static const char* s_predefinedName[PredefinedUniform::Count] =
@@ -681,7 +700,14 @@ namespace bgfx
 
 	void Context::init(bool _createRenderThread)
 	{
+		BX_CHECK(!m_rendererInitialized, "Already initialized?");
 		BX_TRACE("init");
+
+		m_exit = false;
+		m_frames = 0;
+		m_render = &m_frame[0];
+		m_submit = &m_frame[1];
+		m_debug = BGFX_DEBUG_NONE;
 
 		m_submit->create();
 		m_render->create();
@@ -707,7 +733,9 @@ namespace bgfx
 			m_rect[ii].m_height = 1;
 		}
 
-		gameSemPost();
+		m_declRef.init();
+
+		frameNoRenderWait();
 
 		getCommandBuffer(CommandBuffer::RendererInit);
 
@@ -742,12 +770,16 @@ namespace bgfx
 		getCommandBuffer(CommandBuffer::RendererShutdownEnd);
 		frame();
 
+		m_declRef.shutdown(m_vertexDeclHandle);
+
 #if BGFX_CONFIG_MULTITHREADED
 		if (m_thread.isRunning() )
 		{
 			m_thread.shutdown();
 		}
 #endif // BGFX_CONFIG_MULTITHREADED
+
+		renderSemWait();
 
 		m_submit->destroy();
 		m_render->destroy();
@@ -892,35 +924,48 @@ namespace bgfx
 		s_ctx.destroyDynamicVertexBuffer(_handle);
 	}
 
-	bool checkAvailTransientIndexBuffer(uint16_t _num)
+	bool checkAvailTransientIndexBuffer(uint32_t _num)
 	{
 		BGFX_CHECK_MAIN_THREAD();
+		BX_CHECK(0 < _num, "Requesting 0 indices.");
 		return s_ctx.m_submit->checkAvailTransientIndexBuffer(_num);
 	}
 
-	void allocTransientIndexBuffer(TransientIndexBuffer* _tib, uint16_t _num)
+	bool checkAvailTransientVertexBuffer(uint32_t _num, const VertexDecl& _decl)
 	{
 		BGFX_CHECK_MAIN_THREAD();
-		BX_CHECK(NULL != _tib, "_tib can't be NULL");
-		return s_ctx.allocTransientIndexBuffer(_tib, _num);
-	}
-
-	bool checkAvailTransientVertexBuffer(uint16_t _num, const VertexDecl& _decl)
-	{
-		BGFX_CHECK_MAIN_THREAD();
+		BX_CHECK(0 < _num, "Requesting 0 vertices.");
 		return s_ctx.m_submit->checkAvailTransientVertexBuffer(_num, _decl.m_stride);
 	}
 
-	void allocTransientVertexBuffer(TransientVertexBuffer* _tvb, uint16_t _num, const VertexDecl& _decl)
+	bool checkAvailTransientBuffers(uint32_t _numVertices, const VertexDecl& _decl, uint32_t _numIndices)
+	{
+		return checkAvailTransientVertexBuffer(_numVertices, _decl)
+			&& checkAvailTransientIndexBuffer(_numIndices)
+			;
+	}
+
+	void allocTransientIndexBuffer(TransientIndexBuffer* _tib, uint32_t _num)
+	{
+		BGFX_CHECK_MAIN_THREAD();
+		BX_CHECK(NULL != _tib, "_tib can't be NULL");
+		BX_CHECK(0 < _num, "Requesting 0 indices.");
+		return s_ctx.allocTransientIndexBuffer(_tib, _num);
+	}
+
+	void allocTransientVertexBuffer(TransientVertexBuffer* _tvb, uint32_t _num, const VertexDecl& _decl)
 	{
 		BGFX_CHECK_MAIN_THREAD();
 		BX_CHECK(NULL != _tvb, "_tvb can't be NULL");
+		BX_CHECK(0 < _num, "Requesting 0 vertices.");
+		BX_CHECK(UINT16_MAX >= _num, "Requesting %d vertices (max: %d).", _num, UINT16_MAX);
 		return s_ctx.allocTransientVertexBuffer(_tvb, _num, _decl);
 	}
 
-	const InstanceDataBuffer* allocInstanceDataBuffer(uint16_t _num, uint16_t _stride)
+	const InstanceDataBuffer* allocInstanceDataBuffer(uint32_t _num, uint16_t _stride)
 	{
 		BGFX_CHECK_MAIN_THREAD();
+		BX_CHECK(0 < _num, "Requesting 0 instanced data vertices.");
 		return s_ctx.allocInstanceDataBuffer(_num, _stride);
 	}
 
@@ -1270,19 +1315,19 @@ namespace bgfx
 	void setViewTransform(uint8_t _id, const void* _view, const void* _proj, uint8_t _other)
 	{
 		BGFX_CHECK_MAIN_THREAD();
-		s_ctx.m_submit->setViewTransform(_id, _view, _proj, _other);
+		s_ctx.setViewTransform(_id, _view, _proj, _other);
 	}
 
 	void setViewTransformMask(uint32_t _viewMask, const void* _view, const void* _proj, uint8_t _other)
 	{
 		BGFX_CHECK_MAIN_THREAD();
-		s_ctx.m_submit->setViewTransformMask(_viewMask, _view, _proj, _other);
+		s_ctx.setViewTransformMask(_viewMask, _view, _proj, _other);
 	}
 
-	void setState(uint64_t _state)
+	void setState(uint64_t _state, uint32_t _rgba)
 	{
 		BGFX_CHECK_MAIN_THREAD();
-		s_ctx.m_submit->setState(_state);
+		s_ctx.m_submit->setState(_state, _rgba);
 	}
 
 	void setStencil(uint32_t _fstencil, uint32_t _bstencil)

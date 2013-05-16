@@ -5,13 +5,20 @@
 
 #include "bgfx_p.h"
 
-#if (BGFX_CONFIG_RENDERER_OPENGLES2|BGFX_CONFIG_RENDERER_OPENGLES3|BGFX_CONFIG_RENDERER_OPENGL)
+#if BX_PLATFORM_LINUX & (BGFX_CONFIG_RENDERER_OPENGLES2|BGFX_CONFIG_RENDERER_OPENGLES3|BGFX_CONFIG_RENDERER_OPENGL)
 #	include "renderer_gl.h"
-
-#	if BX_PLATFORM_LINUX
+#	define GLX_GLXEXT_PROTOTYPES
+#	include <glx/glxext.h>
 
 namespace bgfx
 {
+	typedef int (*PFNGLXSWAPINTERVALMESAPROC)(uint32_t _interval);
+
+	PFNGLXCREATECONTEXTATTRIBSARBPROC glXCreateContextAttribsARB;
+	PFNGLXSWAPINTERVALEXTPROC glXSwapIntervalEXT;
+	PFNGLXSWAPINTERVALMESAPROC glXSwapIntervalMESA;
+	PFNGLXSWAPINTERVALSGIPROC glXSwapIntervalSGI;
+
 #	define GL_IMPORT(_optional, _proto, _func) _proto _func
 #		include "glimports.h"
 #	undef GL_IMPORT
@@ -39,6 +46,12 @@ namespace bgfx
 				, minor
 				);
 
+		int32_t screen = DefaultScreen(s_display);
+
+		const char* extensions = glXQueryExtensionsString(s_display, screen);
+		BX_TRACE("GLX extensions:");
+		dumpExtensions(extensions);
+
 		const int attrsGlx[] =
 		{
 			GLX_RENDER_TYPE, GLX_RGBA_BIT,
@@ -47,17 +60,17 @@ namespace bgfx
 			GLX_RED_SIZE, 8,
 			GLX_BLUE_SIZE, 8,
 			GLX_GREEN_SIZE, 8,
-			GLX_ALPHA_SIZE, 8,
+//			GLX_ALPHA_SIZE, 8,
 			GLX_DEPTH_SIZE, 24,
 			GLX_STENCIL_SIZE, 8,
-			None,
+			0,
 		};
 
 		// Find suitable config
 		GLXFBConfig bestConfig = NULL;
 
 		int numConfigs;
-		GLXFBConfig* configs = glXChooseFBConfig(s_display, DefaultScreen(s_display), attrsGlx, &numConfigs);
+		GLXFBConfig* configs = glXChooseFBConfig(s_display, screen, attrsGlx, &numConfigs);
 
 		BX_TRACE("glX num configs %d", numConfigs);
 
@@ -112,16 +125,17 @@ namespace bgfx
 
 		XFree(visualInfo);
 
-		typedef GLXContext (*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
-		glXCreateContextAttribsARBProc glXCreateContextAttribsARB = (glXCreateContextAttribsARBProc)glXGetProcAddress((const GLubyte*)"glXCreateContextAttribsARB");
+#if BGFX_CONFIG_RENDERER_OPENGL >= 31
+		glXCreateContextAttribsARB = (PFNGLXCREATECONTEXTATTRIBSARBPROC)glXGetProcAddress( (const GLubyte*)"glXCreateContextAttribsARB");
 		if (NULL != glXCreateContextAttribsARB)
 		{
-			BX_TRACE("Create GL 3.0 context.");
+			BX_TRACE("Create GL 3.1 context.");
 			const int contextAttrs[] =
 			{
 				GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
-				GLX_CONTEXT_MINOR_VERSION_ARB, 0,
-				None,
+				GLX_CONTEXT_MINOR_VERSION_ARB, 1,
+				GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
+				0,
 			};
 
 			GLXContext context = glXCreateContextAttribsARB(s_display, bestConfig, 0, true, contextAttrs);
@@ -132,12 +146,41 @@ namespace bgfx
 				m_context = context;
 			}
 		}
+#else
+		BX_UNUSED(bestConfig);
+#endif // BGFX_CONFIG_RENDERER_OPENGL >= 31
 
 		XUnlockDisplay(s_display);
 
 		import();
 
+		glXSwapIntervalEXT = (PFNGLXSWAPINTERVALEXTPROC)glXGetProcAddress( (const GLubyte*)"glXSwapIntervalEXT");
+		if (NULL != glXSwapIntervalEXT)
+		{
+			BX_TRACE("Using glXSwapIntervalEXT.");
+			glXSwapIntervalEXT(s_display, s_window, 0);
+		}
+		else
+		{
+			glXSwapIntervalMESA = (PFNGLXSWAPINTERVALMESAPROC)glXGetProcAddress( (const GLubyte*)"glXSwapIntervalMESA");
+			if (NULL != glXSwapIntervalMESA)
+			{
+				BX_TRACE("Using glXSwapIntervalMESA.");
+				glXSwapIntervalMESA(0);
+			}
+			else
+			{
+				glXSwapIntervalSGI = (PFNGLXSWAPINTERVALSGIPROC)glXGetProcAddress( (const GLubyte*)"glXSwapIntervalSGI");
+				if (NULL != glXSwapIntervalSGI)
+				{
+					BX_TRACE("Using glXSwapIntervalSGI.");
+					glXSwapIntervalSGI(0);
+				}
+			}
+		}
+
 		glXMakeCurrent(s_display, s_window, m_context);
+
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 		glXSwapBuffers(s_display, s_window);
@@ -149,8 +192,22 @@ namespace bgfx
 		glXDestroyContext(s_display, m_context);
 	}
 
-	void GlContext::resize(uint32_t _width, uint32_t _height)
+	void GlContext::resize(uint32_t /*_width*/, uint32_t /*_height*/, bool _vsync)
 	{
+		int32_t interval = _vsync ? 1 : 0;
+
+		if (NULL != glXSwapIntervalEXT)
+		{
+			glXSwapIntervalEXT(s_display, s_window, interval);
+		}
+		else if (NULL != glXSwapIntervalMESA)
+		{
+			glXSwapIntervalMESA(interval);
+		}
+		else if (NULL != glXSwapIntervalSGI)
+		{
+			glXSwapIntervalSGI(interval);
+		}
 	}
 
 	void GlContext::swap()
@@ -172,6 +229,4 @@ namespace bgfx
 
 } // namespace bgfx
 
-#	endif // BX_PLATFORM_LINUX
-#endif // (BGFX_CONFIG_RENDERER_OPENGLES2|BGFX_CONFIG_RENDERER_OPENGLES3|BGFX_CONFIG_RENDERER_OPENGL)
-
+#endif // BX_PLATFORM_LINUX & (BGFX_CONFIG_RENDERER_OPENGLES2|BGFX_CONFIG_RENDERER_OPENGLES3|BGFX_CONFIG_RENDERER_OPENGL)

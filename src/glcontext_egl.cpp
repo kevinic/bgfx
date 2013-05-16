@@ -16,7 +16,7 @@ namespace bgfx
 #		include "glimports.h"
 #	undef GL_IMPORT
 
-	void GlContext::create(uint32_t _width, uint32_t _height)
+	void GlContext::create(uint32_t /*_width*/, uint32_t /*_height*/)
 	{
 		EGLNativeDisplayType ndt = EGL_DEFAULT_DISPLAY;
 		EGLNativeWindowType nwt = (EGLNativeWindowType)NULL;
@@ -50,6 +50,13 @@ namespace bgfx
 		success = eglChooseConfig(m_display, attrs, &config, 1, &numConfig);
 		BGFX_FATAL(success, Fatal::UnableToInitialize, "eglChooseConfig");
 
+#	if BX_PLATFORM_ANDROID
+		EGLint format;
+		eglGetConfigAttrib(m_display, config, EGL_NATIVE_VISUAL_ID, &format);
+		ANativeWindow_setBuffersGeometry(g_bgfxAndroidWindow, 0, 0, format);
+		nwt = g_bgfxAndroidWindow;
+#	endif // BX_PLATFORM_ANDROID
+
 		m_surface = eglCreateWindowSurface(m_display, config, nwt, NULL);
 		BGFX_FATAL(m_surface != EGL_NO_SURFACE, Fatal::UnableToInitialize, "Failed to create surface.");
 
@@ -70,6 +77,8 @@ namespace bgfx
 		success = eglMakeCurrent(m_display, m_surface, m_surface, m_context);
 		BGFX_FATAL(success, Fatal::UnableToInitialize, "Failed to set context.");
 
+		eglSwapInterval(m_display, 0);
+
 #	if BX_PLATFORM_EMSCRIPTEN
 		emscripten_set_canvas_size(_width, _height);
 #	endif // BX_PLATFORM_EMSCRIPTEN
@@ -86,8 +95,9 @@ namespace bgfx
 		m_context = NULL;
 	}
 
-	void GlContext::resize(uint32_t _width, uint32_t _height)
+	void GlContext::resize(uint32_t /*_width*/, uint32_t /*_height*/, bool _vsync)
 	{
+		eglSwapInterval(m_display, _vsync ? 1 : 0);
 	}
 
 	void GlContext::swap()

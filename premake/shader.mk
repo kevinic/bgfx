@@ -3,14 +3,20 @@
 # License: http://www.opensource.org/licenses/BSD-2-Clause
 #
 
+ifndef VERBOSE
+SILENT = @
+endif
+
 ifndef TARGET
 .PHONY: all
-all:;@echo Usage: make TARGET=# [clean]
-	@echo 	TARGET=0 (hlsl - dx9)
-	@echo 	TARGET=1 (hlsl - dx11)
-	@echo 	TARGET=2 (glsl - nacl)
-	@echo 	TARGET=3 (glsl - android)
-	@echo 	TARGET=4 (glsl - linux)
+all:
+	@echo Usage: make TARGET=# [clean, all, rebuild]
+	@echo "  TARGET=0 (hlsl - dx9)"
+	@echo "  TARGET=1 (hlsl - dx11)"
+	@echo "  TARGET=2 (glsl - nacl)"
+	@echo "  TARGET=3 (glsl - android)"
+	@echo "  TARGET=4 (glsl - linux)"
+	@echo "  VERBOSE=1 show build commands."
 else
 SHADERC="$(BGFX_DIR)/tools/bin/shaderc"
 
@@ -44,6 +50,10 @@ endif
 endif
 endif
 
+THISDIR := $(dir $(lastword $(MAKEFILE_LIST)))
+VS_FLAGS+=-i $(THISDIR)../src/
+FS_FLAGS+=-i $(THISDIR)../src/
+
 BUILD_OUTPUT_DIR=$(addprefix ./, $(RUNTIME_DIR)/$(SHADER_PATH))
 BUILD_INTERMEDIATE_DIR=$(addprefix $(BUILD_DIR)/, $(SHADER_PATH))
 
@@ -53,8 +63,14 @@ VS_DEPS=$(addprefix $(BUILD_INTERMEDIATE_DIR)/,$(addsuffix .bin.d, $(basename $(
 FS_SOURCES=$(wildcard fs_*.sc)
 FS_DEPS=$(addprefix $(BUILD_INTERMEDIATE_DIR)/,$(addsuffix .bin.d, $(basename $(FS_SOURCES))))
 
+UNAME := $(shell uname)
+ifeq ($(UNAME),$(filter $(UNAME),Linux Darwin))
+CMD_MKDIR=mkdir -p "$(1)"
+CMD_RMDIR=rm -r "$(1)"
+else
 CMD_MKDIR=cmd /C "if not exist "$(subst /,\,$(1))" mkdir "$(subst /,\,$(1))""
 CMD_RMDIR=cmd /C "if exist "$(subst /,\,$(1))" rmdir /S /Q "$(subst /,\,$(1))""
+endif
 
 VS_BIN = $(addprefix $(BUILD_INTERMEDIATE_DIR)/, $(addsuffix .bin, $(basename $(VS_SOURCES))))
 FS_BIN = $(addprefix $(BUILD_INTERMEDIATE_DIR)/, $(addsuffix .bin, $(basename $(FS_SOURCES))))
@@ -64,13 +80,13 @@ ASM = $(VS_ASM) $(FS_ASM)
 
 $(BUILD_INTERMEDIATE_DIR)/vs_%.bin : vs_%.sc
 	@echo [$(<)]
-	@$(SHADERC) $(VS_FLAGS) --type vertex --depends -o $(@) -f $(<) --disasm
-	@cp $(@) $(BUILD_OUTPUT_DIR)/$(@F)
+	$(SILENT) $(SHADERC) $(VS_FLAGS) --type vertex --depends -o $(@) -f $(<) --disasm
+	$(SILENT) cp $(@) $(BUILD_OUTPUT_DIR)/$(@F)
 
 $(BUILD_INTERMEDIATE_DIR)/fs_%.bin : fs_%.sc
 	@echo [$(<)]
-	@$(SHADERC) $(FS_FLAGS) --type fragment --depends -o $(@) -f $(<) --disasm
-	@cp $(@) $(BUILD_OUTPUT_DIR)/$(@F)
+	$(SILENT) $(SHADERC) $(FS_FLAGS) --type fragment --depends -o $(@) -f $(<) --disasm
+	$(SILENT) cp $(@) $(BUILD_OUTPUT_DIR)/$(@F)
 
 .PHONY: all
 all: dirs $(BIN)

@@ -1600,11 +1600,11 @@ ast_expression::hir(exec_list *instructions,
 	  *    negative constant expression."
 	  */
 	 if (array->type->is_matrix()) {
-	    if (array->type->row_type()->vector_elements <= idx) {
+	    if ((int)array->type->row_type()->vector_elements <= idx) {
 	       bound = array->type->row_type()->vector_elements;
 	    }
 	 } else if (array->type->is_vector()) {
-	    if (array->type->vector_elements <= idx) {
+	    if ((int)array->type->vector_elements <= idx) {
 	       bound = array->type->vector_elements;
 	    }
 	 } else {
@@ -1738,7 +1738,7 @@ ast_expression::hir(exec_list *instructions,
       break;
 
    case ast_bool_constant:
-      result = new(ctx) ir_constant(bool(this->primary_expression.bool_constant));
+      result = new(ctx) ir_constant(bool(!!this->primary_expression.bool_constant));
       break;
 
    case ast_sequence: {
@@ -2477,7 +2477,7 @@ process_initializer(ir_variable *var, ast_declaration *decl,
 }
 
 static void
-apply_precision_to_variable(const struct ast_type_specifier *spec,
+apply_precision_to_variable(const class ast_type_specifier *spec,
 				 ir_variable *var,
 				 struct _mesa_glsl_parse_state *state)
 {
@@ -2984,8 +2984,15 @@ ast_declarator_list::hir(exec_list *instructions,
 	  * but otherwise we run into trouble if a function is prototyped, a
 	  * global var is decled, then the function is defined with usage of
 	  * the global var.  See glslparsertest's CorrectModule.frag.
+	  * However, do not insert declarations before default precision statements.
 	  */
-	 instructions->push_head(var);
+	 exec_node* before_node = instructions->head;
+	 while (before_node && ((ir_instruction*)before_node)->ir_type == ir_type_precision)
+	    before_node = before_node->next;
+	 if (before_node)
+	    before_node->insert_before(var);
+	 else
+	    instructions->push_head(var);
       }
 
       instructions->append_list(&initializer_instructions);
@@ -3943,7 +3950,22 @@ ast_type_specifier::hir(exec_list *instructions,
          return NULL;
       }
 
-      /* FINISHME: Translate precision statements into IR. */
+      {
+         void *ctx = state;
+
+         const char* precision_type = NULL;
+         switch (this->precision) {
+         case glsl_precision_high:		precision_type = "highp"; break;
+         case glsl_precision_medium:		precision_type = "mediump"; break;
+         case glsl_precision_low:		precision_type = "lowp"; break;
+         case glsl_precision_undefined:	precision_type = ""; break;
+         }
+         char* precision_statement = ralloc_asprintf(ctx, "precision %s %s", precision_type, this->type_name);
+
+         ir_precision_statement *const stmt = new(ctx) ir_precision_statement(precision_statement);
+		  
+         instructions->push_head(stmt);
+      }
       return NULL;
    }
 
@@ -4088,16 +4110,16 @@ ast_uniform_block::hir(exec_list *instructions,
       decl_list->hir(&declared_variables, state);
 
       foreach_list_const(node, &declared_variables) {
-	 struct ir_variable *var = (ir_variable *)node;
+	 class ir_variable *var = (ir_variable *)node;
 
 	 struct gl_uniform_buffer_variable *ubo_var =
 	    &ubo->Uniforms[ubo->NumUniforms++];
 
-	 var->uniform_block = ubo - state->uniform_blocks;
+	 var->uniform_block = (int)(ubo - state->uniform_blocks);
 
 	 ubo_var->Name = ralloc_strdup(state->uniform_blocks, var->name);
 	 ubo_var->Type = var->type;
-	 ubo_var->Buffer = ubo - state->uniform_blocks;
+	 ubo_var->Buffer = (int)(ubo - state->uniform_blocks);
 	 ubo_var->Offset = 0; /* Assigned at link time. */
 
 	 if (var->type->is_matrix() ||

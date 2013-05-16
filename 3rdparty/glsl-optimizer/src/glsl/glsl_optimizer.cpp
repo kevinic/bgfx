@@ -31,6 +31,7 @@ initialize_mesa_context(struct gl_context *ctx, gl_api api)
    {
 	   ctx->Extensions.OES_standard_derivatives = GL_TRUE;
 	   ctx->Extensions.EXT_shadow_samplers = GL_TRUE;
+	   ctx->Extensions.EXT_frag_depth = GL_TRUE;
    }
 
    ctx->Const.GLSLVersion = 140;
@@ -137,7 +138,7 @@ static inline void debug_print_ir (const char* name, exec_list* ir, _mesa_glsl_p
 	printf("**** %s:\n", name);
 	//_mesa_print_ir (ir, state);
 	char* foobar = _mesa_print_ir_glsl(ir, state, ralloc_strdup(memctx, ""), kPrintGlslFragment);
-	printf(foobar);
+	printf("%s\n", foobar);
 	validate_ir_tree(ir);
 	#endif
 }
@@ -170,7 +171,7 @@ static void propagate_precision_expr(ir_instruction *ir, void *data)
 		return;
 	
 	glsl_precision prec_params_max = glsl_precision_undefined;
-	for (int i = 0; i < expr->get_num_operands(); ++i)
+	for (int i = 0; i < (int)expr->get_num_operands(); ++i)
 	{
 		ir_rvalue* op = expr->operands[i];
 		if (op && op->get_precision() != glsl_precision_undefined)
@@ -316,7 +317,7 @@ glslopt_shader* glslopt_optimize (glslopt_ctx* ctx, glslopt_shader_type type, co
 {
 	glslopt_shader* shader = new (ctx->mem_ctx) glslopt_shader ();
 
-	PrintGlslMode printMode;
+	PrintGlslMode printMode = kPrintGlslVertex;
 	switch (type) {
 	case kGlslOptShaderVertex: shader->shader->Type = GL_VERTEX_SHADER; printMode = kPrintGlslVertex; break;
 	case kGlslOptShaderFragment: shader->shader->Type = GL_FRAGMENT_SHADER; printMode = kPrintGlslFragment; break;
@@ -333,7 +334,7 @@ glslopt_shader* glslopt_optimize (glslopt_ctx* ctx, glslopt_shader_type type, co
 
 	if (!(options & kGlslOptionSkipPreprocessor))
 	{
-		state->error = glcpp_preprocess (state, &shaderSource, &state->info_log, state->extensions, ctx->mesa_ctx.API);
+		state->error = !!glcpp_preprocess (state, &shaderSource, &state->info_log, state->extensions, ctx->mesa_ctx.API);
 		if (state->error)
 		{
 			shader->status = !state->error;
@@ -363,13 +364,15 @@ glslopt_shader* glslopt_optimize (glslopt_ctx* ctx, glslopt_shader_type type, co
 	memcpy(shader->shader->builtins_to_link, state->builtins_to_link, sizeof(shader->shader->builtins_to_link[0]) * state->num_builtins_to_link);
 	shader->shader->num_builtins_to_link = state->num_builtins_to_link;
 	
+	struct gl_shader* linked_shader = 0;
+
 	if (!state->error && !ir->is_empty())
 	{
-		struct gl_shader* linked_shader = link_intrastage_shaders(ctx->mem_ctx,
-																  &ctx->mesa_ctx,
-																  shader->whole_program,
-																  shader->whole_program->Shaders,
-																  shader->whole_program->NumShaders);
+		linked_shader = link_intrastage_shaders(ctx->mem_ctx,
+												&ctx->mesa_ctx,
+												shader->whole_program,
+												shader->whole_program->Shaders,
+												shader->whole_program->NumShaders);
 		if (!linked_shader)
 		{
 			shader->status = false;
@@ -400,6 +403,9 @@ glslopt_shader* glslopt_optimize (glslopt_ctx* ctx, glslopt_shader_type type, co
 
 	ralloc_free (ir);
 	ralloc_free (state);
+
+	if (linked_shader)
+		ralloc_free(linked_shader);
 
 	return shader;
 }

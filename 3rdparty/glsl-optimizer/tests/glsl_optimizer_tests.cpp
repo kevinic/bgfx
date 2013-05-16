@@ -156,6 +156,7 @@ static bool CheckGLSL (bool vertex, bool gles, const std::string& testName, cons
 		src += "#define highp\n";
 		src += "#define texture2DLodEXT texture2DLod\n";
 		src += "#define texture2DProjLodEXT texture2DProjLod\n";
+		src += "#define gl_FragDepthEXT gl_FragDepth\n";
 		src += "float shadow2DEXT (sampler2DShadow s, vec3 p) { return shadow2D(s,p).r; }\n";
 		src += "float shadow2DProjEXT (sampler2DShadow s, vec4 p) { return shadow2DProj(s,p).r; }\n";
 	}
@@ -165,6 +166,8 @@ static bool CheckGLSL (bool vertex, bool gles, const std::string& testName, cons
 		replace_string (src, "GL_EXT_shader_texture_lod", "GL_ARB_shader_texture_lod", 0);
 		replace_string (src, "#extension GL_OES_standard_derivatives : require", "", 0);
 		replace_string (src, "#extension GL_EXT_shadow_samplers : require", "", 0);
+		replace_string (src, "#extension GL_EXT_frag_depth : require", "", 0);
+		replace_string (src, "precision ", "// precision ", 0);
 	}
 	const char* sourcePtr = src.c_str();
 
@@ -433,9 +436,9 @@ int main (int argc, const char** argv)
 	float timeDelta = float(time1-time0)/CLOCKS_PER_SEC;
 
 	if (errors != 0)
-		printf ("\n**** %i tests (%.2fsec), %i !!!FAILED!!!\n", tests, timeDelta, errors);
+		printf ("\n**** %i tests (%.2fsec), %i !!!FAILED!!!\n", (int)tests, timeDelta, (int)errors);
 	else
-		printf ("\n**** %i tests (%.2fsec) succeeded\n", tests, timeDelta);
+		printf ("\n**** %i tests (%.2fsec) succeeded\n", (int)tests, timeDelta);
 	
 	// 3.25s
 	// with builtin call linking, 3.84s

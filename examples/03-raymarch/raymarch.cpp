@@ -173,15 +173,15 @@ void renderScreenSpaceQuad(uint32_t _view, bgfx::ProgramHandle _program, float _
 	}
 }
 
-int _main_(int _argc, char** _argv)
+int _main_(int /*_argc*/, char** /*_argv*/)
 {
 	uint32_t width = 1280;
 	uint32_t height = 720;
 	uint32_t debug = BGFX_DEBUG_TEXT;
-	uint32_t reset = BGFX_RESET_NONE;
+	uint32_t reset = BGFX_RESET_VSYNC;
 
 	bgfx::init();
-	bgfx::reset(width, height);
+	bgfx::reset(width, height, reset);
 
 	// Enable debug text.
 	bgfx::setDebug(debug);
@@ -232,6 +232,8 @@ int _main_(int _argc, char** _argv)
 
 	bgfx::ProgramHandle raymarching = loadProgram("vs_raymarching", "fs_raymarching");
 
+	int64_t timeOffset = bx::getHPCounter();
+
 	while (!processEvents(width, height, debug, reset) )
 	{
 		// Set view 0 default viewport.
@@ -274,7 +276,7 @@ int _main_(int _argc, char** _argv)
 		// Set view and projection matrix for view 0.
 		bgfx::setViewTransform(1, NULL, ortho);
 
-		float time = (float)(bx::getHPCounter()/double(bx::getHPFrequency() ) );
+		float time = (float)( (bx::getHPCounter()-timeOffset)/double(bx::getHPFrequency() ) );
 
 		float vp[16];
 		mtxMul(vp, view, proj);
@@ -288,7 +290,7 @@ int _main_(int _argc, char** _argv)
 		float mtxInv[16];
 		mtxInverse(mtxInv, mtx);
 		float lightDirModel[4] = { -0.4f, -0.5f, -1.0f, 0.0f };
-		float lightDirModelN[4];
+		float lightDirModelN[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 		vec3Norm(lightDirModelN, lightDirModel);
 		float lightDir[4];
 		vec4MulMtx(lightDir, lightDirModelN, mtxInv);

@@ -12,27 +12,7 @@
 
 #include "dbg.h"
 #include <bx/string.h>
-
-#if BX_COMPILER_MSVC
-#	define snprintf _snprintf
-#endif // BX_COMPILER_MSVC
-
-#if BX_PLATFORM_WINDOWS || BX_PLATFORM_XBOX360
-extern "C"
-{
-	__declspec(dllimport) void __stdcall OutputDebugStringA(const char* _str);
-}
-#endif // BX_PLATFORM_WINDOWS
-
-void dbgOutput(const char* _out)
-{
-#if BX_PLATFORM_WINDOWS || BX_PLATFORM_XBOX360
-	OutputDebugStringA(_out);
-#elif BX_PLATFORM_NACL || BX_PLATFORM_LINUX || BX_PLATFORM_OSX
-	fputs(_out, stderr);
-	fflush(stderr);
-#endif // BX_PLATFORM_
-}
+#include <bx/debug.h>
 
 void dbgPrintfVargs(const char* _format, va_list _argList)
 {
@@ -45,7 +25,7 @@ void dbgPrintfVargs(const char* _format, va_list _argList)
 		len = bx::vsnprintf(out, len, _format, _argList);
 	}
 	out[len] = '\0';
-	dbgOutput(out);
+	bx::debugOutput(out);
 }
 
 void dbgPrintf(const char* _format, ...)
@@ -80,7 +60,7 @@ void dbgPrintfData(const void* _data, uint32_t _size, const char* _format, ...)
 		uint32_t asciiPos = 0;
 		for (uint32_t ii = 0; ii < _size; ++ii)
 		{
-			snprintf(&hex[hexPos], sizeof(hex)-hexPos, "%02x ", data[asciiPos]);
+			bx::snprintf(&hex[hexPos], sizeof(hex)-hexPos, "%02x ", data[asciiPos]);
 			hexPos += 3;
 
 			ascii[asciiPos] = isprint(data[asciiPos]) ? data[asciiPos] : '.';

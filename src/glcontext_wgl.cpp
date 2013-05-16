@@ -19,6 +19,7 @@ namespace bgfx
 	PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB;
 	PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB;
 	PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
+	PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT;
 
 #	define GL_IMPORT(_optional, _proto, _func) _proto _func
 #		include "glimports.h"
@@ -69,7 +70,7 @@ namespace bgfx
 		return context;
 	}
 
-	void GlContext::create(uint32_t _width, uint32_t _height)
+	void GlContext::create(uint32_t /*_width*/, uint32_t /*_height*/)
 	{
 		m_opengl32dll = LoadLibrary("opengl32.dll");
 		BGFX_FATAL(NULL != m_opengl32dll, Fatal::UnableToInitialize, "Failed to load opengl32.dll.");
@@ -115,37 +116,13 @@ namespace bgfx
 		wglGetExtensionsStringARB = (PFNWGLGETEXTENSIONSSTRINGARBPROC)wglGetProcAddress("wglGetExtensionsStringARB");
 		wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)wglGetProcAddress("wglChoosePixelFormatARB");
 		wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)wglGetProcAddress("wglCreateContextAttribsARB");
+		wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
 
 		if (NULL != wglGetExtensionsStringARB)
 		{
-			BX_TRACE("WGL extensions:");
 			const char* extensions = (const char*)wglGetExtensionsStringARB(hdc);
-			if (NULL != extensions)
-			{
-				char name[1024];
-				const char* pos = extensions;
-				const char* end = extensions + strlen(extensions);
-				while (pos < end)
-				{
-					uint32_t len;
-					const char* space = strchr(pos, ' ');
-					if (NULL != space)
-					{
-						len = uint32_min(sizeof(name), (uint32_t)(space - pos) );
-					}
-					else
-					{
-						len = uint32_min(sizeof(name), (uint32_t)strlen(pos) );
-					}
-
-					strncpy(name, pos, len);
-					name[len] = '\0';
-
-					BX_TRACE("\t%s", name);
-
-					pos += len+1;
-				}
-			}
+			BX_TRACE("WGL extensions:");
+			dumpExtensions(extensions);
 		}
 
 		if (NULL != wglChoosePixelFormatARB
@@ -199,23 +176,32 @@ namespace bgfx
 			result = SetPixelFormat(m_hdc, pixelFormat, &pfd);
 			BGFX_FATAL(0 != result, Fatal::UnableToInitialize, "SetPixelFormat failed (last err: 0x%08x)!", GetLastError() );
 
-			const int32_t contextAttrs[] =
+			uint32_t flags = BGFX_CONFIG_DEBUG ? WGL_CONTEXT_DEBUG_BIT_ARB : 0;
+			BX_UNUSED(flags);
+			int32_t contextAttrs[9] =
 			{
-#if 1
- 				WGL_CONTEXT_MAJOR_VERSION_ARB, 2,
- 				WGL_CONTEXT_MINOR_VERSION_ARB, 1,
-#else
+#if BGFX_CONFIG_RENDERER_OPENGL >= 31
 				WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
-				WGL_CONTEXT_MINOR_VERSION_ARB, 2,
+				WGL_CONTEXT_MINOR_VERSION_ARB, 1,
+				WGL_CONTEXT_FLAGS_ARB, flags,
 				WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-#endif // 1
-#if BGFX_CONFIG_DEBUG
-				WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB,
-#endif // BGFX_CONFIG_DEBUG
+#else
+				WGL_CONTEXT_MAJOR_VERSION_ARB, 2,
+				WGL_CONTEXT_MINOR_VERSION_ARB, 1,
+				0, 0,
+				0, 0,
+#endif // BGFX_CONFIG_RENDERER_OPENGL >= 31
 				0
 			};
 
 			m_context = wglCreateContextAttribsARB(m_hdc, 0, contextAttrs);
+			if (NULL == m_context)
+			{
+				// nVidia doesn't like context profile mask for contexts below 3.2?
+				contextAttrs[6] = WGL_CONTEXT_PROFILE_MASK_ARB == contextAttrs[6] ? 0 : contextAttrs[6];
+				m_context = wglCreateContextAttribsARB(m_hdc, 0, contextAttrs);
+			}
+			BGFX_FATAL(NULL != m_context, Fatal::UnableToInitialize, "Failed to create context 0x%08x.", GetLastError() );
 		}
 
 		wglMakeCurrent(NULL, NULL);
@@ -229,6 +215,12 @@ namespace bgfx
 
 		int result = wglMakeCurrent(m_hdc, m_context);
 		BGFX_FATAL(0 != result, Fatal::UnableToInitialize, "wglMakeCurrent failed!");
+
+		if (NULL != wglSwapIntervalEXT)
+		{
+			wglSwapIntervalEXT(0);
+		}
+
 		import();
 	}
 
@@ -246,8 +238,12 @@ namespace bgfx
 		m_opengl32dll = NULL;
 	}
 
-	void GlContext::resize(uint32_t _width, uint32_t _height)
+	void GlContext::resize(uint32_t /*_width*/, uint32_t /*_height*/, bool _vsync)
 	{
+		if (NULL != wglSwapIntervalEXT)
+		{
+			wglSwapIntervalEXT(_vsync ? 1 : 0);
+		}
 	}
 
 	void GlContext::swap()

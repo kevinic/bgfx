@@ -69,12 +69,12 @@ Download AndroidNDK from:
 
 	sudo apt-get install libgl1-mesa-dev
 
-### Prerequisites for Native Client (Pepper 22) on Windows
+### Prerequisites for Native Client on Windows
 
 Download Native Client SDK from:  
 [https://developers.google.com/native-client/sdk/download](https://developers.google.com/native-client/sdk/download)
 
-	setx NACL <path to Native Client SDK directory>\toolchain\win_x86_newlib
+	setx NACL_SDK_ROOT <path to Native Client SDK directory>
 
 ### Prerequisites for Windows
 
@@ -89,8 +89,11 @@ If you're building with Visual Studio 2008, you'll need TR1 support from:
 If you're building with MinGW/TDM compiler on Windows make DirectX SDK
 directory link to directory without spaces in the path.
 
-	mklink /D <path to DirectX SDK directory> c:\dxsdk
+	mklink /D c:\dxsdk <path to DirectX SDK directory>
 	setx DXSDK_DIR c:\dxsdk
+
+Apply this [patch](https://github.com/bkaradzic/bx/blob/master/include/compat/mingw/dxsdk.patch)
+to DXSDK from June 2010 to be able to use it with MinGW/TDM.
 
 ### Building
 
@@ -112,7 +115,8 @@ Other platforms:
 
 Configuration is `<platform>-<debug/release>[32/64]`. For example:
 
-	linux-release32, nacl-debug64, android-release, etc.
+	linux-release32, nacl-debug64, nacl-arm-debug, pnacl-release, 
+	android-release, etc.
 
 Examples
 --------
@@ -131,7 +135,7 @@ Rendering simple static mesh.
 ![example-01-cubes](https://github.com/bkaradzic/bgfx/raw/master/examples/01-cubes/screenshot.png)
 
 ### 02-metaballs
-Rendering with transient buffers.
+Rendering with transient buffers and embedding shaders.
 
 ![example-02-metaballs](https://github.com/bkaradzic/bgfx/raw/master/examples/02-metaballs/screenshot.png)
 
@@ -166,6 +170,16 @@ Updating textures.
 Using multiple views and render targets.
 
 ![example-09-hdr](https://github.com/bkaradzic/bgfx/raw/master/examples/09-hdr/screenshot.png)
+
+### 10-font
+Use the font system to display text and styled text.
+
+![example-10-font](https://github.com/bkaradzic/bgfx/raw/master/examples/10-font/screenshot.png)
+
+### 11-fontsdf
+Use a single distance field font to render text of various size.
+
+![example-11-fontsdf](https://github.com/bkaradzic/bgfx/raw/master/examples/11-fontsdf/screenshot.png)
 
 Internals
 ---------
@@ -302,14 +316,39 @@ Bunny
 Uffizi  
 [Light Probe Image Gallery ](http://www.pauldebevec.com/Probes/)
 
-Droid Sans  
-[http://www.fontsquirrel.com/license/Droid-Sans](http://www.fontsquirrel.com/license/Droid-Sans)
+Droid Sans Font  
+http://www.fontsquirrel.com/license/Droid-Sans
+
+Bleeding Cowboys Font  
+http://www.dafont.com/bleeding-cowboys.font
+
+Cheap Fire Font  
+http://www.dafont.com/cheap-fire.font
+
+Five Minutes Font  
+http://www.fonts2u.com/fiveminutes.font
+
+Mias Scribblings Font  
+http://www.dafont.com/mias-scribblings.font
+
+Ruritania Font  
+http://www.dafont.com/ruritania.font
+
+Signika Font  
+http://fontfabric.com/signika-font/
+
+Visitor Font  
+http://www.dafont.com/visitor.font
+
+Tree Pack 1  
+http://www.turbosquid.com/3d-models/free-obj-mode-tree-pack/506851
 
 Contributors
 ------------
 
 Garett Bass ([@gtbass](https://github.com/gtbass)) - OSX port.  
-Jeremie Roy ([@jeremieroy](https://github.com/jeremieroy)) - Font system and examples.
+Jeremie Roy ([@jeremieroy](https://github.com/jeremieroy)) - Font system and examples.  
+Milos Tosic ([@milostosic](https://github.com/milostosic)) - LOD example.
 
 License (BSD 2-clause)
 ----------------------

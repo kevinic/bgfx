@@ -3,15 +3,15 @@
  * License: http://www.opensource.org/licenses/BSD-2-Clause
  */
 
-#include "../common/common.h"
+#include "common.h"
 
 #include <bgfx.h>
 #include <bx/countof.h>
 #include <bx/timer.h>
-#include "../common/entry.h"
-#include "../common/dbg.h"
-#include "../common/math.h"
-#include "../common/processevents.h"
+#include "entry.h"
+#include "dbg.h"
+#include "fpumath.h"
+#include "processevents.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -381,7 +381,7 @@ int _main_(int /*_argc*/, char** /*_argv*/)
 		float view[16];
 		float proj[16];
 		mtxLookAt(view, eye, at);
-		mtxProj(proj, 60.0f, 16.0f/9.0f, 0.1f, 100.0f);
+		mtxProj(proj, 60.0f, float(width)/float(height), 0.1f, 100.0f);
 
 		float lightPosRadius[4][4];
 		for (uint32_t ii = 0; ii < numLights; ++ii)
@@ -408,14 +408,16 @@ int _main_(int /*_argc*/, char** /*_argv*/)
 		bgfx::setViewTransform(0, view, proj);
 
 		const uint16_t instanceStride = 64;
-		const bgfx::InstanceDataBuffer* idb = bgfx::allocInstanceDataBuffer(9, instanceStride);
-		if (NULL != idb)
-		{
-			uint8_t* data = idb->data;
+		const uint16_t numInstances = 3;
 
-			// Write instance data for 3x3 cubes.
-			for (uint32_t yy = 0; yy < 3; ++yy)
+		// Write instance data for 3x3 cubes.
+		for (uint32_t yy = 0; yy < 3; ++yy)
+		{
+			const bgfx::InstanceDataBuffer* idb = bgfx::allocInstanceDataBuffer(numInstances, instanceStride);
+			if (NULL != idb)
 			{
+				uint8_t* data = idb->data;
+
 				for (uint32_t xx = 0; xx < 3; ++xx)
 				{
 					float* mtx = (float*)data;
@@ -424,43 +426,35 @@ int _main_(int /*_argc*/, char** /*_argv*/)
 					mtx[13] = -3.0f + float(yy)*3.0f;
 					mtx[14] = 0.0f;
 
-					float* color = (float*)&data[64];
-					color[0] = sin(time+float(xx)/11.0f)*0.5f+0.5f;
-					color[1] = cos(time+float(yy)/11.0f)*0.5f+0.5f;
-					color[2] = sin(time*3.0f)*0.5f+0.5f;
-					color[3] = 1.0f;
-
 					data += instanceStride;
 				}
+
+				// Set vertex and fragment shaders.
+				bgfx::setProgram(program);
+
+				// Set vertex and index buffer.
+				bgfx::setVertexBuffer(vbh);
+				bgfx::setIndexBuffer(ibh);
+
+				// Set instance data buffer.
+				bgfx::setInstanceDataBuffer(idb, numInstances);
+
+				// Bind textures.
+				bgfx::setTexture(0, u_texColor, textureColor);
+				bgfx::setTexture(1, u_texNormal, textureNormal);
+
+				// Set render states.
+				bgfx::setState(0
+					|BGFX_STATE_RGB_WRITE
+					|BGFX_STATE_ALPHA_WRITE
+					|BGFX_STATE_DEPTH_WRITE
+					|BGFX_STATE_DEPTH_TEST_LESS
+					|BGFX_STATE_MSAA
+					);
+
+				// Submit primitive for rendering to view 0.
+				bgfx::submit(0);
 			}
-
-			uint16_t numInstances = (uint16_t)( (data - idb->data)/instanceStride);
-
-			// Set vertex and fragment shaders.
-			bgfx::setProgram(program);
-
-			// Set vertex and index buffer.
-			bgfx::setVertexBuffer(vbh);
-			bgfx::setIndexBuffer(ibh);
-
-			// Set instance data buffer.
-			bgfx::setInstanceDataBuffer(idb, numInstances);
-
-			// Bind textures.
-			bgfx::setTexture(0, u_texColor, textureColor);
-			bgfx::setTexture(1, u_texNormal, textureNormal);
-
-			// Set render states.
-			bgfx::setState(0
-				|BGFX_STATE_RGB_WRITE
-				|BGFX_STATE_ALPHA_WRITE
-				|BGFX_STATE_DEPTH_WRITE
-				|BGFX_STATE_DEPTH_TEST_LESS
-				|BGFX_STATE_MSAA
-				);
-
-			// Submit primitive for rendering to view 0.
-			bgfx::submit(0);
 		}
 
 		// Advance to next frame. Rendering thread will be kicked to 

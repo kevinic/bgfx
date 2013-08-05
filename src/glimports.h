@@ -63,6 +63,7 @@ GL_IMPORT(false, PFNGLCREATESHADERPROC,                   glCreateShader);
 GL_IMPORT(false, PFNGLDELETEPROGRAMPROC,                  glDeleteProgram);
 GL_IMPORT(false, PFNGLDELETESHADERPROC,                   glDeleteShader);
 GL_IMPORT(false, PFNGLATTACHSHADERPROC,                   glAttachShader);
+GL_IMPORT(false, PFNGLDETACHSHADERPROC,                   glDetachShader);
 GL_IMPORT(false, PFNGLCOMPILESHADERPROC,                  glCompileShader);
 GL_IMPORT(false, PFNGLSHADERSOURCEPROC,                   glShaderSource);
 GL_IMPORT(false, PFNGLGETSHADERIVPROC,                    glGetShaderiv);
@@ -105,7 +106,6 @@ GL_IMPORT(false, PFNGLUNIFORMMATRIX4FVPROC,               glUniformMatrix4fv);
 GL_IMPORT(false, PFNGLTEXIMAGE3DPROC,                     glTexImage3D);
 GL_IMPORT(false, PFNGLTEXSUBIMAGE3DPROC,                  glTexSubImage3D);
 GL_IMPORT(false, PFNGLCOPYTEXSUBIMAGE3DPROC,              glCopyTexSubImage3D);
-GL_IMPORT(false, PFNGLTEXIMAGE2DMULTISAMPLEPROC,          glTexImage2DMultisample);
 
 GL_IMPORT(false, PFNGLGENQUERIESPROC,                     glGenQueries);
 GL_IMPORT(false, PFNGLDELETEQUERIESPROC,                  glDeleteQueries);
@@ -141,6 +141,12 @@ GL_IMPORT(true,  PFNGLDEBUGMESSAGECONTROLARBPROC,         glDebugMessageControlA
 GL_IMPORT(true,  PFNGLDEBUGMESSAGEINSERTARBPROC,          glDebugMessageInsertARB);
 GL_IMPORT(true,  PFNGLDEBUGMESSAGECALLBACKARBPROC,        glDebugMessageCallbackARB);
 GL_IMPORT(true,  PFNGLGETDEBUGMESSAGELOGARBPROC,          glGetDebugMessageLogARB);
+
+GL_IMPORT(true,  PFNGLGENSAMPLERSPROC,                    glGenSamplers);
+GL_IMPORT(true,  PFNGLDELETESAMPLERSPROC,                 glDeleteSamplers);
+GL_IMPORT(true,  PFNGLBINDSAMPLERPROC,                    glBindSampler);
+GL_IMPORT(true,  PFNGLSAMPLERPARAMETERIPROC,              glSamplerParameteri);
+GL_IMPORT(true,  PFNGLSAMPLERPARAMETERFPROC,              glSamplerParameterf);
 
 #if BGFX_CONFIG_DEBUG_GREMEDY
 GL_IMPORT(true,  PFNGLSTRINGMARKERGREMEDYPROC,            glStringMarkerGREMEDY);

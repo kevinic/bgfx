@@ -3,22 +3,64 @@
  * License: http://www.opensource.org/licenses/BSD-2-Clause
  */
 
-#include "../common/common.h"
+#include "common.h"
 
 #include <bgfx.h>
 #include <bx/timer.h>
 #include <bx/countof.h>
 #include <bx/string.h>
-#include "../common/entry.h"
-#include "../common/dbg.h"
-#include "../common/math.h"
-#include "../common/processevents.h"
+#include "entry.h"
+#include "dbg.h"
+#include "fpumath.h"
+#include "processevents.h"
 
-#include "../common/font/font_manager.h"
-#include "../common/font/text_buffer_manager.h"
+#include "font/font_manager.h"
+#include "font/text_buffer_manager.h"
 
 #include <stdio.h>
 #include <wchar.h>
+
+TrueTypeHandle loadTtf(FontManager* _fm, const char* _fontPath)
+{
+	FILE* pFile;
+	pFile = fopen(_fontPath, "rb");
+	if (NULL != pFile)
+	{
+		if (0 == fseek(pFile, 0L, SEEK_END) )
+		{
+			// Get the size of the file.
+			long bufsize = ftell(pFile);
+			if (bufsize == -1)
+			{
+				fclose(pFile);
+				TrueTypeHandle invalid = BGFX_INVALID_HANDLE;
+				return invalid;
+			}
+
+			uint8_t* buffer = new uint8_t[bufsize];
+
+			// Go back to the start of the file.
+			fseek(pFile, 0L, SEEK_SET);
+
+			// Read the entire file into memory.
+			uint32_t newLen = fread( (void*)buffer, sizeof(char), bufsize, pFile);
+			if (newLen == 0)
+			{
+				fclose(pFile);
+				delete [] buffer;
+				TrueTypeHandle invalid = BGFX_INVALID_HANDLE;
+				return invalid;
+			}
+
+			fclose(pFile);
+
+			return _fm->createTtf(buffer, bufsize);
+		}
+	}
+
+	TrueTypeHandle invalid = BGFX_INVALID_HANDLE;
+	return invalid;
+}
 
 int _main_(int /*_argc*/, char** /*_argv*/)
 {
@@ -65,7 +107,7 @@ int _main_(int /*_argc*/, char** /*_argv*/)
 	for (uint32_t ii = 0; ii < fontCount; ++ii)
 	{
 		// Instantiate a usable font.
-		fontFiles[ii] = fontManager->loadTrueTypeFromFile(fontNames[ii]);
+		fontFiles[ii] = loadTtf(fontManager, fontNames[ii]);
 		fonts[ii] = fontManager->createFontByPixelSize(fontFiles[ii], 0, 32);
 
 		// Preload glyphs and blit them to atlas.
@@ -74,10 +116,10 @@ int _main_(int /*_argc*/, char** /*_argv*/)
 		// You can unload the truetype files at this stage, but in that 
 		// case, the set of glyph's will be limited to the set of preloaded 
 		// glyph.
-		fontManager->unloadTrueType(fontFiles[ii]);
+		fontManager->destroyTtf(fontFiles[ii]);
 	}
 
-	TrueTypeHandle console_tt = fontManager->loadTrueTypeFromFile("font/visitor1.ttf");
+	TrueTypeHandle console_tt = loadTtf(fontManager, "font/visitor1.ttf");
 
 	// This font doesn't have any preloaded glyph's but the truetype file 
 	// is loaded so glyph will be generated as needed.
@@ -85,7 +127,7 @@ int _main_(int /*_argc*/, char** /*_argv*/)
 
 	//create a static text buffer compatible with alpha font
 	//a static text buffer content cannot be modified after its first submit.
-	TextBufferHandle staticText = textBufferManager->createTextBuffer(FONT_TYPE_ALPHA, STATIC);
+	TextBufferHandle staticText = textBufferManager->createTextBuffer(FONT_TYPE_ALPHA, BufferType::Static);
 
 	// The pen position represent the top left of the box of the first line 
 	// of text.
@@ -127,7 +169,7 @@ int _main_(int /*_argc*/, char** /*_argv*/)
 	textBufferManager->appendText(staticText, fonts[0], L"dog\n");
 
 	// Create a transient buffer for real-time data.
-	TextBufferHandle transientText = textBufferManager->createTextBuffer(FONT_TYPE_ALPHA, TRANSIENT);
+	TextBufferHandle transientText = textBufferManager->createTextBuffer(FONT_TYPE_ALPHA, BufferType::Transient);
 
 	while (!processEvents(width, height, debug, reset) )
 	{
@@ -180,7 +222,7 @@ int _main_(int /*_argc*/, char** /*_argv*/)
 		bgfx::frame();
 	}
 
-	fontManager->unloadTrueType(console_tt);
+	fontManager->destroyTtf(console_tt);
 
 	// Destroy the fonts.
 	fontManager->destroyFont(consola_16);

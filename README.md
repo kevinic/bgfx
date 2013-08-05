@@ -1,4 +1,4 @@
-bgfx {#mainpage}
+bgfx
 ====
 
 https://github.com/bkaradzic/bgfx
@@ -20,10 +20,23 @@ Supported rendering backends:
 Platforms:
 
  * Android
+ * iOS
  * Linux
  * Native Client
  * OSX
  * Windows
+
+Who is using it?
+----------------
+
+http://airmech.com/ AirMech is a free-to-play futuristic action real-time
+strategy video game developed and published by Carbon Games.
+
+http://theengine.co/ Loom Game Engine developed by The Engine Company. Loom
+is a powerful 2D game engine with live reloading of code and assets, a friendly
+scripting language, and an efficient command-line workflow. Here is video where
+they explain why they choose bgfx over alternatives:  
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=PHY_XHkMGIM&t=1m53s" target="_blank"><img src="http://img.youtube.com/vi/PHY_XHkMGIM/0.jpg" alt="Why did you choose bgfx?" width="240" height="180" border="10" /></a>
 
 Dependencies
 ------------
@@ -219,11 +232,11 @@ All configuration settings are located inside [src/config.h](https://github.com/
 
 Every `BGFX_CONFIG_*` setting can be changed by passing defines thru compiler
 switches. For example setting preprocessor define `BGFX_CONFIG_RENDERER_OPENGL=1`
-on Windows will change backend renderer to OpenGL 2.1. on Windows. Since
-rendering APIs are platform specific, this obviously won't work nor make sense
-in all cases. Certain platforms have only single choice, for example the Native
-Client works only with OpenGL ES 2.0 renderer, using anything other than that
-will result in build errors.
+will change backend renderer to OpenGL 2.1. on Windows. Since rendering APIs are
+platform specific, this obviously won't work nor make sense in all cases.
+Certain platforms have only single choice, for example the Native Client works
+only with OpenGL ES 2.0 renderer, using anything other than that will result in
+build errors.
 
 Tools
 -----
@@ -251,15 +264,8 @@ Todo
  - BlendFuncSeparate and BlendEquationSeparate.
  - Blit between textures.
  - Occlusion queries.
- - iOS support.
  - DX11: MSAA.
  - Fullscreen mode.
-
-Notice
-------
-
-This is alpha software, and it lacks documentation and examples. If you're
-interested to use it in your project, please let me know.
 
 Contact
 -------
@@ -339,6 +345,12 @@ http://fontfabric.com/signika-font/
 
 Visitor Font  
 http://www.dafont.com/visitor.font
+
+Special-Elite Font
+http://www.fontspace.com/astigmatic-one-eye-typographic-institute/special-elite
+
+Sherlock Holmes text
+http://www.gutenberg.org/ebooks/1661
 
 Tree Pack 1  
 http://www.turbosquid.com/3d-models/free-obj-mode-tree-pack/506851

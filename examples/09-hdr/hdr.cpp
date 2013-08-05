@@ -3,17 +3,17 @@
  * License: http://www.opensource.org/licenses/BSD-2-Clause
  */
 
-#include "../common/common.h"
+#include "common.h"
 
 #include <bgfx.h>
 #include <bx/countof.h>
 #include <bx/timer.h>
 #include <bx/readerwriter.h>
-#include "../common/entry.h"
-#include "../common/dbg.h"
-#include "../common/math.h"
-#include "../common/processevents.h"
-#include "../common/imgui/imgui.h"
+#include "entry.h"
+#include "dbg.h"
+#include "fpumath.h"
+#include "processevents.h"
+#include "imgui/imgui.h"
 
 #include <string.h>
 #include <vector>
@@ -640,7 +640,7 @@ int _main_(int /*_argc*/, char** /*_argv*/)
 		vec3MulMtx(temp, eye, mtx);
 
 		mtxLookAt(view, temp, at);
-		mtxProj(proj, 60.0f, 16.0f/9.0f, 0.1f, 100.0f);
+		mtxProj(proj, 60.0f, float(width)/float(height), 0.1f, 100.0f);
 
 		// Set view and projection matrix for view 1.
 		bgfx::setViewTransformMask(1<<1, view, proj);

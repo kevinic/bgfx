@@ -156,11 +156,19 @@ namespace bgfx
 	{
 	}
 
-	void Context::rendererSaveScreenShot(Memory* /*_mem*/)
+	void Context::rendererSaveScreenShot(const char* /*_filePath*/)
+	{
+	}
+
+	void Context::rendererUpdateViewName(uint8_t /*_id*/, const char* /*_name*/)
 	{
 	}
 
 	void Context::rendererUpdateUniform(uint16_t /*_loc*/, const void* /*_data*/, uint32_t /*_size*/)
+	{
+	}
+
+	void Context::rendererSetMarker(const char* /*_marker*/, uint32_t /*_size*/)
 	{
 	}
 

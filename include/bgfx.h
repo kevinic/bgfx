@@ -40,7 +40,14 @@
 #define BGFX_STATE_BLEND_FACTOR          UINT64_C(0x000000000000c000)
 #define BGFX_STATE_BLEND_INV_FACTOR      UINT64_C(0x000000000000d000)
 #define BGFX_STATE_BLEND_SHIFT           12
-#define BGFX_STATE_BLEND_MASK            UINT64_C(0x000000000ffff000)
+#define BGFX_STATE_BLEND_MASK            UINT64_C(0x00000000000ff000)
+
+#define BGFX_STATE_BLEND_EQUATION_SUB    UINT64_C(0x0000000000100000)
+#define BGFX_STATE_BLEND_EQUATION_REVSUB UINT64_C(0x0000000000200000)
+#define BGFX_STATE_BLEND_EQUATION_MIN    UINT64_C(0x0000000000300000)
+#define BGFX_STATE_BLEND_EQUATION_MAX    UINT64_C(0x0000000000400000)
+#define BGFX_STATE_BLEND_EQUATION_SHIFT  20
+#define BGFX_STATE_BLEND_EQUATION_MASK   UINT64_C(0x0000000000700000)
 
 #define BGFX_STATE_CULL_CW               UINT64_C(0x0000000010000000)
 #define BGFX_STATE_CULL_CCW              UINT64_C(0x0000000020000000)
@@ -60,10 +67,9 @@
 #define BGFX_STATE_POINT_SIZE_SHIFT      44
 #define BGFX_STATE_POINT_SIZE_MASK       UINT64_C(0x000ff00000000000)
 
-#define BGFX_STATE_SRGBWRITE             UINT64_C(0x0010000000000000)
 #define BGFX_STATE_MSAA                  UINT64_C(0x0020000000000000)
 
-#define BGFX_STATE_RESERVED              UINT64_C(0xff00000000000000)
+#define BGFX_STATE_RESERVED_MASK         UINT64_C(0xff00000000000000)
 
 #define BGFX_STATE_NONE                  UINT64_C(0x0000000000000000)
 #define BGFX_STATE_MASK                  UINT64_C(0xffffffffffffffff)
@@ -79,6 +85,15 @@
 #define BGFX_STATE_ALPHA_REF(_ref) ( (uint64_t(_ref)<<BGFX_STATE_ALPHA_REF_SHIFT)&BGFX_STATE_ALPHA_REF_MASK)
 #define BGFX_STATE_POINT_SIZE(_size) ( (uint64_t(_size)<<BGFX_STATE_POINT_SIZE_SHIFT)&BGFX_STATE_POINT_SIZE_MASK)
 #define BGFX_STATE_BLEND_FUNC(_src, _dst) ( uint64_t(_src)|( uint64_t(_dst)<<4) )
+
+#define BGFX_STATE_BLEND_ADD         (BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE,       BGFX_STATE_BLEND_ONE          ) )
+#define BGFX_STATE_BLEND_ALPHA       (BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_COLOR) )
+#define BGFX_STATE_BLEND_DARKEN      (BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE,       BGFX_STATE_BLEND_ONE          ) | BGFX_STATE_BLEND_EQUATION_MIN)
+#define BGFX_STATE_BLEND_LIGHTEN     (BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE,       BGFX_STATE_BLEND_ONE          ) | BGFX_STATE_BLEND_EQUATION_MAX)
+#define BGFX_STATE_BLEND_MULTIPLY    (BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_DST_COLOR, BGFX_STATE_BLEND_ZERO         ) )
+#define BGFX_STATE_BLEND_NORMAL      (BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE,       BGFX_STATE_BLEND_INV_SRC_ALPHA) )
+#define BGFX_STATE_BLEND_SCREEN      (BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE,       BGFX_STATE_BLEND_INV_SRC_COLOR) )
+#define BGFX_STATE_BLEND_LINEAR_BURN (BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_DST_COLOR, BGFX_STATE_BLEND_INV_DST_COLOR) | BGFX_STATE_BLEND_EQUATION_SUB)
 
 ///
 #define BGFX_STENCIL_FUNC_REF_SHIFT      0
@@ -175,7 +190,7 @@
 #define BGFX_TEXTURE_MIP_POINT           UINT32_C(0x00100000)
 #define BGFX_TEXTURE_MIP_SHIFT           20
 #define BGFX_TEXTURE_MIP_MASK            UINT32_C(0x00100000)
-#define BGFX_TEXTURE_SRGB                UINT32_C(0x00200000)
+#define BGFX_TEXTURE_RESERVED_MASK       UINT32_C(0xf0000000)
 
 ///
 #define BGFX_RENDER_TARGET_NONE          UINT32_C(0x00000000)
@@ -196,7 +211,6 @@
 #define BGFX_RENDER_TARGET_MSAA_X16      UINT32_C(0x00040000)
 #define BGFX_RENDER_TARGET_MSAA_SHIFT    16
 #define BGFX_RENDER_TARGET_MSAA_MASK     UINT32_C(0x00070000)
-#define BGFX_RENDER_TARGET_SRGBWRITE     UINT32_C(0x00080000)
 
 ///
 #define BGFX_RESET_NONE                  UINT32_C(0x00000000)
@@ -606,6 +620,13 @@ namespace bgfx
 	///
 	bool checkAvailTransientVertexBuffer(uint32_t _num, const VertexDecl& _decl);
 
+	/// Returns true if internal instance data buffer has enough space.
+	///
+	/// @param _num Number of instances.
+	/// @param _stride Stride per instance.
+	///
+	bool checkAvailInstanceDataBuffer(uint32_t _num, uint16_t _stride);
+
 	/// Returns true if both internal transient index and vertex buffer have
 	/// enough space.
 	///
@@ -617,22 +638,37 @@ namespace bgfx
 
 	/// Allocate transient index buffer.
 	///
-	/// @param[out] _tib is valid for the duration of frame, and it can be
-	///   reused for multiple draw calls.
-	/// @param _num number of indices to allocate.
+	/// @param[out] _tib TransientIndexBuffer structure is filled and is valid
+	///   for the duration of frame, and it can be reused for multiple draw
+	///   calls.
+	/// @param _num Number of indices to allocate.
+	///
+	/// NOTE:
+	///   You must call setIndexBuffer after alloc in order to avoid memory
+	///   leak.
 	///
 	void allocTransientIndexBuffer(TransientIndexBuffer* _tib, uint32_t _num);
 
 	/// Allocate transient vertex buffer.
 	///
-	/// @param[out] _tvb is valid for the duration of frame, and it can be
-	///   reused for multiple draw calls.
-	/// @param _num number of vertices to allocate.
-	/// @param _decl vertex declaration.
+	/// @param[out] _tvb TransientVertexBuffer structure is filled and is valid
+	///   for the duration of frame, and it can be reused for multiple draw
+	///   calls.
+	/// @param _num Number of vertices to allocate.
+	/// @param _decl Vertex declaration.
+	///
+	/// NOTE:
+	///   You must call setVertexBuffer after alloc in order to avoid memory
+	///   leak.
 	///
 	void allocTransientVertexBuffer(TransientVertexBuffer* _tvb, uint32_t _num, const VertexDecl& _decl);
 
 	/// Allocate instance data buffer.
+	///
+	/// NOTE:
+	///   You must call setInstanceDataBuffer after alloc in order to avoid
+	///   memory leak.
+	///
 	const InstanceDataBuffer* allocInstanceDataBuffer(uint32_t _num, uint16_t _stride);
 
 	/// Create vertex shader from memory buffer.
@@ -651,8 +687,8 @@ namespace bgfx
 
 	/// Create program with vertex and fragment shaders.
 	///
-	/// @param _vsh vertex shader.
-	/// @param _fsh fragment shader.
+	/// @param _vsh Vertex shader.
+	/// @param _fsh Fragment shader.
 	/// @returns Program handle if vertex shader output and fragment shader
 	///   input are matching, otherwise returns invalid program handle.
 	///
@@ -676,8 +712,6 @@ namespace bgfx
 	///   BGFX_TEXTURE_[MIN/MAG/MIP]_[POINT/ANISOTROPIC] - Point or anisotropic
 	///     sampling.
 	///
-	///   BGFX_TEXTURE_SRGB - Sample as sRGB texture.
-	///
 	/// @param _info Returns parsed DDS texture information.
 	/// @returns Texture handle.
 	///
@@ -699,8 +733,10 @@ namespace bgfx
 	void updateTexture3D(TextureHandle _handle, uint8_t _mip, uint16_t _x, uint16_t _y, uint16_t _z, uint16_t _width, uint16_t _height, uint16_t _depth, const Memory* _mem);
 
 	/// Update Cube texture.
+	///
 	/// @param _side Cubemap side, where 0 is +X, 1 is -X, 2 is +Y, 3 is
 	///   -Y, 4 is +Z, and 5 is -Z.
+	///
 	void updateTextureCube(TextureHandle _handle, uint8_t _side, uint8_t _mip, uint16_t _x, uint16_t _y, uint16_t _width, uint16_t _height, const Memory* _mem);
 
 	/// Destroy texture.
@@ -718,19 +754,38 @@ namespace bgfx
 	/// Destroy shader uniform parameter.
 	void destroyUniform(UniformHandle _handle);
 
+	/// Set view name.
+	///
+	/// @param _id View id.
+	/// @param _name View name.
+	///
+	/// NOTE:
+	///   This is debug only feature.
+	///
+	void setViewName(uint8_t _id, const char* _name);
+
 	/// Set view rectangle. Draw primitive outside view will be clipped.
 	void setViewRect(uint8_t _id, uint16_t _x, uint16_t _y, uint16_t _width, uint16_t _height);
 
-	/// Set view rectangle for multiple views .
+	/// Set view rectangle for multiple views.
 	void setViewRectMask(uint32_t _viewMask, uint16_t _x, uint16_t _y, uint16_t _width, uint16_t _height);
+
+	/// Set view scissor. Draw primitive outside view will be clipped. When
+	/// _x, _y, _width and _height are set to 0, scissor will be disabled.
+	void setViewScissor(uint8_t _id, uint16_t _x = 0, uint16_t _y = 0, uint16_t _width = 0, uint16_t _height = 0);
+
+	/// Set view scissor for multiple views. When _x, _y, _width and _height
+	/// are set to 0, scissor will be disabled.
+	void setViewScissorMask(uint32_t _viewMask, uint16_t _x = 0, uint16_t _y = 0, uint16_t _width = 0, uint16_t _height = 0);
 
 	/// Set view clear flags.
 	///
-	/// @param _id view id.
-	/// @param _flags clear flags. See: BGFX_CLEAR_*
-	/// @param _rgba color clear value.
-	/// @param _depth depth clear value.
-	/// @param _stencil stencil clear value.
+	/// @param _id View id.
+	/// @param _flags Clear flags. Use BGFX_CLEAR_NONE to remove any clear
+	///   operation. See: BGFX_CLEAR_*.
+	/// @param _rgba Color clear value.
+	/// @param _depth Depth clear value.
+	/// @param _stencil Stencil clear value.
 	///
 	void setViewClear(uint8_t _id, uint8_t _flags, uint32_t _rgba = 0x000000ff, float _depth = 1.0f, uint8_t _stencil = 0);
 
@@ -744,11 +799,22 @@ namespace bgfx
 	/// Set mulitple views into sequential mode.
 	void setViewSeqMask(uint32_t _viewMask, bool _enabled);
 
-	/// Set view render target. View without render target draws primitives
-	/// into default backbuffer.
+	/// Set view render target.
+	///
+	/// @param _id View id.
+	/// @param _handle Render target handle. Passing BGFX_INVALID_HANDLE as
+	///   render target handle will draw primitives from this view into
+	///   default backbuffer.
+	///
 	void setViewRenderTarget(uint8_t _id, RenderTargetHandle _handle);
 
 	/// Set view render target for multiple views.
+	///
+	/// @param _viewMask View mask.
+	/// @param _handle Render target handle. Passing BGFX_INVALID_HANDLE as
+	///   render target handle will draw primitives from this view into
+	///   default backbuffer.
+	///
 	void setViewRenderTargetMask(uint32_t _viewMask, RenderTargetHandle _handle);
 
 	/// Set view view and projection matrices, all draw primitives in this
@@ -758,6 +824,9 @@ namespace bgfx
 	/// Set view view and projection matrices for multiple views.
 	void setViewTransformMask(uint32_t _viewMask, const void* _view, const void* _proj, uint8_t _other = 0xff);
 
+	/// Sets debug marker.
+	void setMarker(const char* _marker);
+
 	/// Set render states for draw primitive.
 	///
 	/// @param _state State flags. Default state for primitive type is
@@ -766,10 +835,10 @@ namespace bgfx
 	///   BGFX_STATE_ALPHA_WRITE - Enable alpha write.
 	///   BGFX_STATE_DEPTH_WRITE - Enable depth write.
 	///   BGFX_STATE_DEPTH_TEST_* - Depth test function.
-	///   BGFX_STATE_BLEND_* - See NOTE: BGFX_STATE_BLEND_FUNC.
+	///   BGFX_STATE_BLEND_* - See NOTE 1: BGFX_STATE_BLEND_FUNC.
+	///   BGFX_STATE_BLEND_EQUATION_* - See NOTE 2.
 	///   BGFX_STATE_CULL_* - Backface culling mode.
 	///   BGFX_STATE_RGB_WRITE - Enable RGB write.
-	///   BGFX_STATE_SRGBWRITE - Enable sRGB write.
 	///   BGFX_STATE_MSAA - Enable MSAA.
 	///   BGFX_STATE_PT_[LINES/POINTS] - Primitive type.
 	///
@@ -777,8 +846,10 @@ namespace bgfx
 	///   BGFX_STATE_BLEND_INV_FACTOR blend modes.
 	///
 	/// NOTE:
-	///   Use BGFX_STATE_ALPHA_REF, BGFX_STATE_POINT_SIZE and
-	///   BGFX_STATE_BLEND_FUNC macros to setup more complex states.
+	///   1. Use BGFX_STATE_ALPHA_REF, BGFX_STATE_POINT_SIZE and
+	///      BGFX_STATE_BLEND_FUNC macros to setup more complex states.
+	///   2. BGFX_STATE_BLEND_EQUATION_ADD is set when no other blend
+	///      equation is specified.
 	///
 	void setState(uint64_t _state, uint32_t _rgba = UINT32_MAX);
 
@@ -790,11 +861,21 @@ namespace bgfx
 	///
 	void setStencil(uint32_t _fstencil, uint32_t _bstencil = BGFX_STENCIL_NONE);
 
+	/// Set scissor for draw primitive.
+	uint16_t setScissor(uint16_t _x, uint16_t _y, uint16_t _width, uint16_t _height);
+
+	/// Set scissor from cache for draw primitive.
+	///
+	/// @param _cache Index in scissor cache. Passing UINT16_MAX unset primitive
+	///   scissor and primitive will use view scissor instead.
+	///
+	void setScissor(uint16_t _cache = UINT16_MAX);
+
 	/// Set model matrix for draw primitive. If it is not called model will
 	/// be rendered with identity model matrix.
 	///
-	/// @param _mtx pointer to first matrix in array.
-	/// @param _num number of matrices in array.
+	/// @param _mtx Pointer to first matrix in array.
+	/// @param _num Number of matrices in array.
 	/// @returns index into matrix cache in case the same model matrix has
 	///   to be used for other draw primitive call.
 	///
@@ -802,8 +883,8 @@ namespace bgfx
 
 	/// Set model matrix from matrix cache for draw primitive.
 	///
-	/// @param _cache index in matrix cache.
-	/// @param _num number of matrices from cache.
+	/// @param _cache Index in matrix cache.
+	/// @param _num Number of matrices from cache.
 	///
 	void setTransform(uint32_t _cache, uint16_t _num = 1);
 
@@ -835,24 +916,56 @@ namespace bgfx
 	void setProgram(ProgramHandle _handle);
 
 	/// Set texture stage for draw primitive.
-	void setTexture(uint8_t _stage, UniformHandle _sampler, TextureHandle _handle);
+	///
+	/// @param _stage Texture unit.
+	/// @param _sampler Program sampler.
+	/// @param _handle Texture handle.
+	/// @param _flags Texture sampling mode. Default value UINT32_MAX uses
+	///   texture sampling settings from the texture.
+	///
+	///   BGFX_TEXTURE_[U/V/W]_[MIRROR/CLAMP] - Mirror or clamp to edge wrap
+	///     mode.
+	///
+	///   BGFX_TEXTURE_[MIN/MAG/MIP]_[POINT/ANISOTROPIC] - Point or anisotropic
+	///     sampling.
+	///
+	/// @param _flags Texture sampler filtering flags. UINT32_MAX use the
+	///   sampler filtering mode set by texture.
+	///
+	void setTexture(uint8_t _stage, UniformHandle _sampler, TextureHandle _handle, uint32_t _flags = UINT32_MAX);
 
 	/// Set texture stage for draw primitive.
-	void setTexture(uint8_t _stage, UniformHandle _sampler, RenderTargetHandle _handle, bool _depth = false);
+	///
+	/// @param _stage Texture unit.
+	/// @param _sampler Program sampler.
+	/// @param _handle Render target handle.
+	/// @param _flags Texture sampling mode. Default value UINT32_MAX uses
+	///   texture sampling settings from the texture.
+	///
+	///   BGFX_TEXTURE_[U/V/W]_[MIRROR/CLAMP] - Mirror or clamp to edge wrap
+	///     mode.
+	///
+	///   BGFX_TEXTURE_[MIN/MAG/MIP]_[POINT/ANISOTROPIC] - Point or anisotropic
+	///     sampling.
+	///
+	void setTexture(uint8_t _stage, UniformHandle _sampler, RenderTargetHandle _handle, bool _depth = false, uint32_t _flags = UINT32_MAX);
 
 	/// Submit primitive for rendering into single view.
 	///
 	/// @param _id View id.
-	/// @param _depth depth for sorting.
+	/// @param _depth Depth for sorting.
 	///
 	void submit(uint8_t _id, int32_t _depth = 0);
 
 	/// Submit primitive for rendering into multiple views.
 	///
-	/// @param _viewMask mask to which views to submit draw primitive calls.
-	/// @param _depth depth for sorting.
+	/// @param _viewMask Mask to which views to submit draw primitive calls.
+	/// @param _depth Depth for sorting.
 	///
 	void submitMask(uint32_t _viewMask, int32_t _depth = 0);
+
+	/// Discard all previously set state for draw call.
+	void discard();
 
 	/// Request screen shot.
 	void saveScreenShot(const char* _filePath);

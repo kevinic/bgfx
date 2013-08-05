@@ -8,14 +8,6 @@
 
 #define BGFX_CONFIG_RENDERER_DIRECT3D9EX (BX_PLATFORM_WINDOWS && 0)
 
-#ifndef D3DSTREAMSOURCE_INDEXEDDATA
-#	define D3DSTREAMSOURCE_INDEXEDDATA  (1<<30)
-#endif// D3DSTREAMSOURCE_INDEXEDDATA
-
-#ifndef D3DSTREAMSOURCE_INSTANCEDATA
-#	define D3DSTREAMSOURCE_INSTANCEDATA (2<<30)
-#endif // D3DSTREAMSOURCE_INSTANCEDATA
-
 #if BX_PLATFORM_WINDOWS
 #	if !BGFX_CONFIG_RENDERER_DIRECT3D9EX
 #		define D3D_DISABLE_9EX
@@ -24,21 +16,8 @@
 
 #	if BGFX_CONFIG_RENDERER_DIRECT3D9EX
 typedef HRESULT (WINAPI *Direct3DCreate9ExFn)(UINT SDKVersion, IDirect3D9Ex**);
-#	else
-typedef IDirect3D9* (WINAPI *Direct3DCreate9Fn)(UINT SDKVersion);
 #	endif // BGFX_CONFIG_RENDERER_DIRECT3D9EX
-
-typedef int (WINAPI *D3DPERF_BeginEventFunc)(D3DCOLOR col, LPCWSTR wszName);
-typedef int (WINAPI *D3DPERF_EndEventFunc)();
-typedef void (WINAPI *D3DPERF_SetMarkerFunc)(D3DCOLOR col, LPCWSTR wszName);
-typedef void (WINAPI *D3DPERF_SetRegionFunc)(D3DCOLOR col, LPCWSTR wszName);
-typedef BOOL (WINAPI *D3DPERF_QueryRepeatFrameFunc)();
-typedef void (WINAPI *D3DPERF_SetOptionsFunc)(DWORD dwOptions);
-typedef DWORD (WINAPI *D3DPERF_GetStatusFunc)();
-
-#	define _PIX_SETMARKER(_col, _name) s_renderCtx.m_D3DPERF_SetMarker(_col, L#_name)
-#	define _PIX_BEGINEVENT(_col, _name) s_renderCtx.m_D3DPERF_BeginEvent(_col, L#_name)
-#	define _PIX_ENDEVENT() s_renderCtx.m_D3DPERF_EndEvent()
+typedef IDirect3D9* (WINAPI *Direct3DCreate9Fn)(UINT SDKVersion);
 
 #elif BX_PLATFORM_XBOX360
 #	include <xgraphics.h>
@@ -56,20 +35,18 @@ typedef DWORD (WINAPI *D3DPERF_GetStatusFunc)();
 #	define _PIX_ENDEVENT() do {} while(0)
 #endif // BX_PLATFORM_
 
+#ifndef D3DSTREAMSOURCE_INDEXEDDATA
+#	define D3DSTREAMSOURCE_INDEXEDDATA  (1<<30)
+#endif// D3DSTREAMSOURCE_INDEXEDDATA
+
+#ifndef D3DSTREAMSOURCE_INSTANCEDATA
+#	define D3DSTREAMSOURCE_INSTANCEDATA (2<<30)
+#endif // D3DSTREAMSOURCE_INSTANCEDATA
+
 #include "renderer_d3d.h"
 
 namespace bgfx
 {
-#if BGFX_CONFIG_DEBUG_PIX
-#	define PIX_SETMARKER(_col, _name) _PIX_SETMARKER(_col, _name)
-#	define PIX_BEGINEVENT(_col, _name) _PIX_BEGINEVENT(_col, _name)
-#	define PIX_ENDEVENT() _PIX_ENDEVENT()
-#else
-#	define PIX_SETMARKER(_col, _name)
-#	define PIX_BEGINEVENT(_col, _name)
-#	define PIX_ENDEVENT()
-#endif // BGFX_CONFIG_DEBUG_PIX
-
 #	ifndef D3DFMT_ATI1
 #		define D3DFMT_ATI1 ( (D3DFORMAT)BX_MAKEFOURCC('A', 'T', 'I', '1') )
 #	endif // D3DFMT_ATI1
@@ -332,7 +309,7 @@ namespace bgfx
 		void updateBegin(uint8_t _side, uint8_t _mip);
 		void update(uint8_t _side, uint8_t _mip, const Rect& _rect, uint16_t _z, uint16_t _depth, const Memory* _mem);
 		void updateEnd();
-		void commit(uint8_t _stage);
+		void commit(uint8_t _stage, uint32_t _flags = BGFX_SAMPLER_DEFAULT_FLAGS);
 	
 		union
 		{
@@ -342,15 +319,9 @@ namespace bgfx
 			IDirect3DCubeTexture9* m_textureCube;
 		};
 
-		D3DTEXTUREFILTERTYPE m_minFilter;
-		D3DTEXTUREFILTERTYPE m_magFilter;
-		D3DTEXTUREFILTERTYPE m_mipFilter;
-		D3DTEXTUREADDRESS m_tau;
-		D3DTEXTUREADDRESS m_tav;
-		D3DTEXTUREADDRESS m_taw;
+		uint32_t m_flags;
 		TextureFormat::Enum m_format;
 		Enum m_type;
-		bool m_srgb;
 	};
 
 	struct RenderTarget
@@ -361,8 +332,6 @@ namespace bgfx
 			, m_color(NULL)
 			, m_depthTexture(NULL)
 			, m_depth(NULL)
-			, m_minFilter(D3DTEXF_LINEAR)
-			, m_magFilter(D3DTEXF_LINEAR)
 			, m_width(0)
 			, m_height(0)
 			, m_flags(0)
@@ -390,7 +359,7 @@ namespace bgfx
 			createTextures();
 		}
 
-		void commit(uint8_t _stage);
+		void commit(uint8_t _stage, uint32_t _textureFlags = BGFX_SAMPLER_DEFAULT_FLAGS);
 		void resolve();
 
 		Msaa m_msaa;
@@ -399,11 +368,10 @@ namespace bgfx
 		IDirect3DSurface9* m_color;
 		IDirect3DTexture9* m_depthTexture;
 		IDirect3DSurface9* m_depth;
-		D3DTEXTUREFILTERTYPE m_minFilter;
-		D3DTEXTUREFILTERTYPE m_magFilter;
 		uint16_t m_width;
 		uint16_t m_height;
 		uint32_t m_flags;
+		uint32_t m_textureFlags;
 		bool m_depthOnly;
 	};
 

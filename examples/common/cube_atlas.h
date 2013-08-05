@@ -33,14 +33,17 @@ struct AtlasRegion
 	{
 		return (Type) ( (mask >> 0) & 0x0000000F);
 	}
+
 	uint32_t getFaceIndex() const
 	{
 		return (mask >> 4) & 0x0000000F;
 	}
+
 	uint32_t getComponentIndex() const
 	{
 		return (mask >> 8) & 0x0000000F;
 	}
+
 	void setMask(Type _type, uint32_t _faceIndex, uint32_t _componentIndex)
 	{
 		mask = (_componentIndex << 8) + (_faceIndex << 4) + (uint32_t)_type;
@@ -80,21 +83,22 @@ public:
 	/// @param vertexBuffer address of the first vertex we want to update. Must be valid up to vertexBuffer + offset + 3*stride + 4*sizeof(int16_t), which means the buffer must contains at least 4 vertex includind the first.
 	/// @param offset byte offset to the first uv coordinate of the vertex in the buffer
 	/// @param stride stride between tho UV coordinates, usually size of a Vertex.
-	void packUV(uint16_t _regionHandle, uint8_t* _vertexBuffer, uint32_t _offset, uint32_t _stride);
-	void packUV(const AtlasRegion& _region, uint8_t* _vertexBuffer, uint32_t _offset, uint32_t _stride);
+	void packUV(uint16_t _regionHandle, uint8_t* _vertexBuffer, uint32_t _offset, uint32_t _stride) const;
+	void packUV(const AtlasRegion& _region, uint8_t* _vertexBuffer, uint32_t _offset, uint32_t _stride) const;
 
 	/// Same as packUV but pack a whole face of the atlas cube, mostly used for debugging and visualizing atlas
-	void packFaceLayerUV(uint32_t _idx, uint8_t* _vertexBuffer, uint32_t _offset, uint32_t _stride);
+	void packFaceLayerUV(uint32_t _idx, uint8_t* _vertexBuffer, uint32_t _offset, uint32_t _stride) const;
 
 	/// Pack the vertex index of the region as 2 quad into an index buffer
-	void packIndex(uint16_t* _indexBuffer, uint32_t _startIndex, uint32_t _startVertex)
+	static void packIndex(uint16_t* _indexBuffer, uint32_t _startIndex, uint32_t _startVertex)
 	{
-		_indexBuffer[_startIndex + 0] = _startVertex + 0;
-		_indexBuffer[_startIndex + 1] = _startVertex + 1;
-		_indexBuffer[_startIndex + 2] = _startVertex + 2;
-		_indexBuffer[_startIndex + 3] = _startVertex + 0;
-		_indexBuffer[_startIndex + 4] = _startVertex + 2;
-		_indexBuffer[_startIndex + 5] = _startVertex + 3;
+		uint16_t* indices = &_indexBuffer[_startIndex];
+		*indices++ = _startVertex + 0;
+		*indices++ = _startVertex + 1;
+		*indices++ = _startVertex + 2;
+		*indices++ = _startVertex + 0;
+		*indices++ = _startVertex + 2;
+		*indices++ = _startVertex + 3;
 	}
 
 	/// return the TextureHandle (cube) of the atlas
@@ -110,7 +114,7 @@ public:
 	}
 
 	/// retrieve the size of side of a texture in pixels
-	uint16_t getTextureSize()
+	uint16_t getTextureSize() const
 	{
 		return m_textureSize;
 	}
@@ -143,28 +147,23 @@ public:
 	}
 
 private:
-	void writeUV(uint8_t* _vertexBuffer, int16_t _x, int16_t _y, int16_t _z, int16_t _w)
-	{
-		( (uint16_t*) _vertexBuffer)[0] = _x;
-		( (uint16_t*) _vertexBuffer)[1] = _y;
-		( (uint16_t*) _vertexBuffer)[2] = _z;
-		( (uint16_t*) _vertexBuffer)[3] = _w;
-	}
+	void init();
 
 	struct PackedLayer;
 	PackedLayer* m_layers;
+	AtlasRegion* m_regions;
+	uint8_t* m_textureBuffer;
 
 	uint32_t m_usedLayers;
 	uint32_t m_usedFaces;
 
 	bgfx::TextureHandle m_textureHandle;
 	uint16_t m_textureSize;
+	float m_texelSize;
+	float m_texelOffset[2];
 
 	uint16_t m_regionCount;
 	uint16_t m_maxRegionCount;
-
-	AtlasRegion* m_regions;
-	uint8_t* m_textureBuffer;
 };
 
 #endif // __CUBE_ATLAS_H__

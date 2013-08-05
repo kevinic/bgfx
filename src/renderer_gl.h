@@ -12,7 +12,9 @@
 
 #if BGFX_CONFIG_RENDERER_OPENGL
 #	if BGFX_CONFIG_RENDERER_OPENGL >= 31
+#		define GLCOREARB_PROTOTYPES
 #		include <gl/glcorearb.h>
+#		define GL_ARB_shader_objects // OSX collsion with GLhandleARB in gltypes.h
 #	else
 #		if BX_PLATFORM_LINUX
 #			define GL_PROTOTYPES
@@ -64,9 +66,28 @@
 
 #elif BGFX_CONFIG_RENDERER_OPENGLES2 || BGFX_CONFIG_RENDERER_OPENGLES3
 #	if BGFX_CONFIG_RENDERER_OPENGLES2
-#		include <GLES2/gl2platform.h>
-#		include <GLES2/gl2.h>
-#		include <GLES2/gl2ext.h>
+#		if BX_PLATFORM_IOS
+#			include <OpenGLES/ES2/gl.h>
+#			include <OpenGLES/ES2/glext.h>
+
+typedef void (GL_APIENTRYP PFNGLBINDVERTEXARRAYOESPROC) (GLuint array);
+typedef void (GL_APIENTRYP PFNGLDELETEVERTEXARRAYSOESPROC) (GLsizei n, const GLuint *arrays);
+typedef void (GL_APIENTRYP PFNGLGENVERTEXARRAYSOESPROC) (GLsizei n, GLuint *arrays);
+typedef GLboolean (GL_APIENTRYP PFNGLISVERTEXARRAYOESPROC) (GLuint array);
+typedef void (GL_APIENTRYP PFNGLGETPROGRAMBINARYOESPROC) (GLuint program, GLsizei bufSize, GLsizei *length, GLenum *binaryFormat, GLvoid *binary);
+typedef void (GL_APIENTRYP PFNGLPROGRAMBINARYOESPROC) (GLuint program, GLenum binaryFormat, const GLvoid *binary, GLint length);
+typedef void (GL_APIENTRYP PFLGLDRAWARRAYSINSTANCEDANGLEPROC) (GLenum mode, GLint first, GLsizei count, GLsizei primcount);
+typedef void (GL_APIENTRYP PFLGLDRAWELEMENTSINSTANCEDANGLEPROC) (GLenum mode, GLsizei count, GLenum type, const void *indices, GLsizei primcount);
+typedef void (GL_APIENTRYP PFLGLVERTEXATTRIBDIVISORANGLEPROC) (GLuint index, GLuint divisor);
+//#define GL_UNSIGNED_INT_10_10_10_2_OES                          0x8DF6
+#define GL_UNSIGNED_INT_2_10_10_10_REV_EXT                      0x8368
+#define GL_SAMPLER_3D_OES                                       0x8B5F
+#define GL_PROGRAM_BINARY_LENGTH_OES                            0x8741
+#		else
+#			include <GLES2/gl2platform.h>
+#			include <GLES2/gl2.h>
+#			include <GLES2/gl2ext.h>
+#		endif // BX_PLATFORM_
 #		define glProgramBinary glProgramBinaryOES
 #		define glGetProgramBinary glGetProgramBinaryOES
 #		define glBindVertexArray glBindVertexArrayOES
@@ -80,6 +101,8 @@
 #		define GL_R32F GL_R32F_EXT
 #		define GL_UNSIGNED_INT_2_10_10_10_REV GL_UNSIGNED_INT_2_10_10_10_REV_EXT
 #		define GL_SAMPLER_3D GL_SAMPLER_3D_OES
+#		define GL_MIN GL_MIN_EXT
+#		define GL_MAX GL_MAX_EXT
 #	elif BGFX_CONFIG_RENDERER_OPENGLES3
 #		include <GLES3/gl3platform.h>
 #		include <GLES3/gl3.h>
@@ -209,6 +232,8 @@ typedef void (*PFNGLGETTRANSLATEDSHADERSOURCEANGLEPROC)(GLuint shader, GLsizei b
 #	include "glcontext_glx.h"
 #elif BX_PLATFORM_OSX
 #	include "glcontext_nsgl.h"
+#elif BX_PLATFORM_IOS
+#	include "glcontext_eagl.h"
 #endif // BX_PLATFORM_
 
 #if BGFX_CONFIG_DEBUG_GREMEDY && (BX_PLATFORM_WINDOWS || BX_PLATFORM_LINUX)
@@ -253,24 +278,10 @@ namespace bgfx
 #endif // BGFX_CONFIG_DEBUG
 
 #if BGFX_CONFIG_DEBUG_GREMEDY
-#	define _GREMEDY_SETMARKER(_string) \
-					do \
-					{ \
-						if (NULL != glStringMarkerGREMEDY) \
-						{ \
-							glStringMarkerGREMEDY( (GLsizei)strlen(_string), _string); \
-						} \
-					} while(0)
-#	define _GREMEDY_FRAMETERMINATOR() \
-					do \
-					{ \
-						if (NULL != glStringMarkerGREMEDY) \
-						{ \
-							glFrameTerminatorGREMEDY(); \
-						} \
-					} while(0)
+#	define _GREMEDY_SETMARKER(_string) glStringMarkerGREMEDY(0, _string)
+#	define _GREMEDY_FRAMETERMINATOR() glFrameTerminatorGREMEDY()
 #else
-#	define _GREMEDY_SETMARKER(_string) do {} while(0)
+#	define _GREMEDY_SETMARKER(_string) do { BX_UNUSED(_string); } while(0)
 #	define _GREMEDY_FRAMETERMINATOR() do {} while(0)
 #endif // BGFX_CONFIG_DEBUG_GREMEDY
 
@@ -285,7 +296,7 @@ namespace bgfx
 
 	class ConstantBuffer;
 	
-	class VaoCache
+	class VaoStateCache
 	{
 	public:
 		GLuint add(uint32_t _hash)
@@ -347,7 +358,7 @@ namespace bgfx
 			m_vaoSet.insert(_hash);
 		}
 
-		void invalidate(VaoCache& _vaoCache)
+		void invalidate(VaoStateCache& _vaoCache)
 		{
 			for (VaoSet::iterator it = m_vaoSet.begin(), itEnd = m_vaoSet.end(); it != itEnd; ++it)
 			{
@@ -360,6 +371,58 @@ namespace bgfx
 		typedef stl::unordered_set<uint32_t> VaoSet;
 		VaoSet m_vaoSet;
 	};
+
+#if !BGFX_CONFIG_RENDERER_OPENGLES2
+	class SamplerStateCache
+	{
+	public:
+		GLuint add(uint32_t _hash)
+		{
+			invalidate(_hash);
+
+			GLuint samplerId;
+			GL_CHECK(glGenSamplers(1, &samplerId) );
+
+			m_hashMap.insert(stl::make_pair(_hash, samplerId) );
+
+			return samplerId;
+		}
+
+		GLuint find(uint32_t _hash)
+		{
+			HashMap::iterator it = m_hashMap.find(_hash);
+			if (it != m_hashMap.end() )
+			{
+				return it->second;
+			}
+
+			return UINT32_MAX;
+		}
+
+		void invalidate(uint32_t _hash)
+		{
+			HashMap::iterator it = m_hashMap.find(_hash);
+			if (it != m_hashMap.end() )
+			{
+				GL_CHECK(glDeleteSamplers(1, &it->second) );
+				m_hashMap.erase(it);
+			}
+		}
+
+		void invalidate()
+		{
+			for (HashMap::iterator it = m_hashMap.begin(), itEnd = m_hashMap.end(); it != itEnd; ++it)
+			{
+				GL_CHECK(glDeleteSamplers(1, &it->second) );
+			}
+			m_hashMap.clear();
+		}
+
+	private:
+		typedef stl::unordered_map<uint32_t, GLuint> HashMap;
+		HashMap m_hashMap;
+	};
+#endif // !BGFX_CONFIG_RENDERER_OPENGLES2
 
 	struct IndexBuffer
 	{
@@ -450,6 +513,9 @@ namespace bgfx
 			, m_target(GL_TEXTURE_2D)
 			, m_fmt(GL_ZERO)
 			, m_type(GL_ZERO)
+			, m_flags(0)
+			, m_currentFlags(UINT32_MAX)
+			, m_numMips(0)
 			, m_compressed(false)
 		{
 		}
@@ -460,11 +526,16 @@ namespace bgfx
 		void createDepth(uint32_t _width, uint32_t _height);
 		void destroy();
 		void update(uint8_t _side, uint8_t _mip, const Rect& _rect, uint16_t _z, uint16_t _depth, const Memory* _mem);
+		void setSamplerState(uint32_t _flags);
+		void commit(uint32_t _stage, uint32_t _flags);
 
 		GLuint m_id;
 		GLenum m_target;
 		GLenum m_fmt;
 		GLenum m_type;
+		uint32_t m_flags;
+		uint32_t m_currentFlags;
+		uint8_t m_numMips;
 		bool m_compressed;
 	};
 
@@ -476,7 +547,7 @@ namespace bgfx
 			m_type = _type;
 
 			bx::MemoryReader reader(_mem->data, _mem->size);
-			m_hash = hashMurmur2A(_mem->data, _mem->size);
+			m_hash = bx::hashMurmur2A(_mem->data, _mem->size);
 
 			uint32_t magic;
 			bx::read(&reader, magic);

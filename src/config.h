@@ -6,6 +6,11 @@
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
 
+//xxxKevinLin-begin
+#define BGFX_CONFIG_MULTITHREADED 0
+#define BGFX_CONFIG_RENDERER_DIRECT3D11 1
+//xxxKevinLin-end
+
 #ifndef BGFX_CONFIG_DEBUG
 #	define BGFX_CONFIG_DEBUG 0
 #endif // BGFX_CONFIG_DEBUG
